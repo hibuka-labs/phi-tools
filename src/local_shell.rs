@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Local shell command execution tool.
 ///
@@ -19,7 +19,13 @@ impl LocalShellTool {
     }
 }
 
-fn format_result(command: &str, stdout: &str, stderr: &str, exit_code: Option<i32>, timed_out: bool) -> String {
+fn format_result(
+    command: &str,
+    stdout: &str,
+    stderr: &str,
+    exit_code: Option<i32>,
+    timed_out: bool,
+) -> String {
     let stdout = stdout.trim();
     let stderr = stderr.trim();
 
@@ -249,6 +255,11 @@ mod tests {
         let tool = LocalShellTool::new(30000);
         let def = tool.definition();
         assert_eq!(def["function"]["name"], "execute_command");
-        assert!(def["function"]["description"].as_str().unwrap().contains("shell"));
+        assert!(
+            def["function"]["description"]
+                .as_str()
+                .unwrap()
+                .contains("shell")
+        );
     }
 }
