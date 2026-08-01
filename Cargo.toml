@@ -2,12 +2,16 @@
 name = "phi-tools"
 version = "0.1.2"
 edition = "2024"
-description = "General-purpose Agent toolset — local shell and file operations"
+description = "General-purpose Agent toolset — local shell, file operations, and browser automation"
 license = "MIT"
 repository = "https://github.com/hibuka-labs/phi-tools"
 readme = "README.md"
-keywords = ["agent", "ai", "llm", "tool", "shell"]
+keywords = ["agent", "ai", "llm", "tool", "shell", "browser"]
 categories = ["development-tools", "asynchronous"]
+
+[features]
+default = []
+browser = ["dep:headless_chrome", "dep:html2md", "dep:serde", "dep:anyhow", "dep:log", "dep:base64", "tokio/rt-multi-thread", "serde/derive"]
 
 [dependencies]
 agent-base = "0.1.7"
@@ -15,5 +19,11 @@ async-trait = "0.1"
 serde_json = "1"
 tokio = { version = "1", features = ["process", "time"] }
 tracing = "0.1"
+headless_chrome = { version = "1.0", optional = true }
+html2md = { version = "0.2", optional = true }
+serde = { version = "1", optional = true }
+anyhow = { version = "1", optional = true }
+log = { version = "0.4", optional = true }
+base64 = { version = "0.22", optional = true }
 
 [dev-dependencies]
