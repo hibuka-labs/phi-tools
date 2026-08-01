@@ -4,8 +4,7 @@
 //! lifecycle (launch/connect/close), tab management, navigation, DOM
 //! extraction, element interaction, and screenshot capture.
 //!
-//! Ported from browser-use-rs, adapted for phi-tools: removed ToolRegistry,
-//! uses anyhow internally, added alive flag for crash detection.
+//! Ported from browser-use-rs, adapted for phi-tools: removed ToolRegistry.
 
 use std::ffi::OsStr;
 use std::sync::Arc;
@@ -20,8 +19,6 @@ use super::dom::DomTree;
 /// Browser session wrapping a Chrome/Chromium instance via CDP.
 pub struct BrowserSession {
     browser: Browser,
-    /// Whether the browser process is still alive.
-    alive: bool,
 }
 
 impl BrowserSession {
@@ -63,7 +60,6 @@ impl BrowserSession {
 
         Ok(Self {
             browser,
-            alive: true,
         })
     }
 
@@ -74,24 +70,11 @@ impl BrowserSession {
 
         Ok(Self {
             browser,
-            alive: true,
         })
     }
 
-    /// Check whether the browser process is still alive.
-    pub fn is_alive(&self) -> bool {
-        self.alive
-    }
-
-    /// Mark the session as dead (e.g., after Chrome crash).
-    #[allow(dead_code)]
-    fn mark_dead(&mut self) {
-        self.alive = false;
-    }
-
-    /// Close the browser and mark session as dead.
+    /// Close the browser.
     pub fn close(&mut self) -> Result<(), String> {
-        self.alive = false;
         // Close all tabs — the browser process exits when all tabs are closed.
         let tabs = self.get_tabs()?;
         for tab in tabs {
@@ -427,10 +410,8 @@ impl BrowserSession {
 
 impl Drop for BrowserSession {
     fn drop(&mut self) {
-        if self.alive {
-            log::debug!("BrowserSession dropped, closing browser");
-            let _ = self.close();
-        }
+        log::debug!("BrowserSession dropped, closing browser");
+        let _ = self.close();
     }
 }
 
@@ -443,7 +424,7 @@ mod tests {
     fn test_launch_and_navigate() {
         let session = BrowserSession::launch(LaunchOptions::default())
             .expect("Failed to launch browser");
-        assert!(session.is_alive());
+        assert!(session.get_tabs().is_ok());
 
         session.navigate("about:blank").expect("Navigation failed");
         session

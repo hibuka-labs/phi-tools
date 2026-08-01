@@ -1,6 +1,9 @@
-//! URL normalization and ARIA tree rendering utilities.
+//! URL normalization, ARIA tree rendering, and shared tool utilities.
+
+use agent_base::{ToolControlFlow, ToolOutput};
 
 use crate::browser::dom::{AriaChild, AriaNode};
+use crate::browser::session::BrowserSession;
 
 /// Normalize a URL: add https:// prefix if missing.
 pub fn normalize_url(url: &str) -> String {
@@ -150,6 +153,40 @@ pub fn get_page_url(tab: &headless_chrome::Tab) -> String {
             .and_then(|v| v.as_str().map(String::from))
             .unwrap_or_else(|| "unknown".to_string()),
         Err(_) => "unknown".to_string(),
+    }
+}
+
+/// Resolve an element's CSS selector from either a snapshot index or an explicit CSS selector.
+/// Returns an error ToolOutput if both are specified or neither.
+pub fn resolve_selector(
+    session: &BrowserSession,
+    index: Option<usize>,
+    selector: Option<String>,
+    tool_name: &str,
+) -> Result<String, ToolOutput> {
+    match (index, selector) {
+        (Some(_), Some(_)) => Err(ToolOutput {
+            summary: format!(
+                "{}: cannot specify both 'index' and 'selector'. Use one or the other.",
+                tool_name
+            ),
+            raw: None,
+            control_flow: ToolControlFlow::Continue,
+            truncation: None,
+        }),
+        (None, None) => Err(ToolOutput {
+            summary: format!("{}: must specify either 'index' or 'selector'.", tool_name),
+            raw: None,
+            control_flow: ToolControlFlow::Continue,
+            truncation: None,
+        }),
+        (Some(idx), None) => session.get_selector_for_index(idx).map_err(|e| ToolOutput {
+            summary: format!("{}: no element at index {}: {}", tool_name, idx, e),
+            raw: None,
+            control_flow: ToolControlFlow::Continue,
+            truncation: None,
+        }),
+        (None, Some(s)) => Ok(s),
     }
 }
 

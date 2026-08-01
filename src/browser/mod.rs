@@ -48,9 +48,4 @@ impl BrowserToolset {
     pub fn session(&self) -> Arc<Mutex<BrowserSession>> {
         self.session.clone()
     }
-
-    /// Check if the browser is still alive.
-    pub fn is_alive(&self) -> bool {
-        self.session.lock().map(|s| s.is_alive()).unwrap_or(false)
-    }
 }

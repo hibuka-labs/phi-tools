@@ -41,7 +41,7 @@ impl Tool for BrowserGoBackTool {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.go_back() {
                 Ok(_) => {
                     let snapshot = session.extract_dom().map_or_else(
@@ -64,6 +64,6 @@ impl Tool for BrowserGoBackTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_go_back panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_go_back failed: {}", e)))?
     }
 }

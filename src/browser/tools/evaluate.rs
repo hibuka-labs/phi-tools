@@ -47,7 +47,7 @@ impl Tool for BrowserEvaluateTool {
         let script = args["script"].as_str().unwrap_or("").to_string();
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.evaluate(&script) {
                 Ok(result) => Ok(ToolOutput {
                     summary: format!("JavaScript result: {}", result),
@@ -64,6 +64,6 @@ impl Tool for BrowserEvaluateTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_evaluate panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_evaluate failed: {}", e)))?
     }
 }

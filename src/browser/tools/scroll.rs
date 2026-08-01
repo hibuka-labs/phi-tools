@@ -54,7 +54,7 @@ impl Tool for BrowserScrollTool {
         let amount = args["amount"].as_u64().unwrap_or(500) as u32;
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.scroll(&direction, amount) {
                 Ok(_) => Ok(ToolOutput {
                     summary: format!("Scrolled {} by {}px.", direction, amount),
@@ -71,6 +71,6 @@ impl Tool for BrowserScrollTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_scroll panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_scroll failed: {}", e)))?
     }
 }

@@ -47,7 +47,7 @@ impl Tool for BrowserExtractTool {
         let include_html = args["include_html"].as_bool().unwrap_or(false);
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
             if include_html {
                 match session.get_html() {
                     Ok(html) => Ok(ToolOutput {
@@ -83,6 +83,6 @@ impl Tool for BrowserExtractTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_extract_content panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_extract_content failed: {}", e)))?
     }
 }

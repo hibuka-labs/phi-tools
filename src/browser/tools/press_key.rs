@@ -47,7 +47,7 @@ impl Tool for BrowserPressKeyTool {
         let key = args["key"].as_str().unwrap_or("").to_string();
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.press_key(&key) {
                 Ok(_) => Ok(ToolOutput {
                     summary: format!("Pressed key: {}", key),
@@ -64,6 +64,6 @@ impl Tool for BrowserPressKeyTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_press_key panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_press_key failed: {}", e)))?
     }
 }

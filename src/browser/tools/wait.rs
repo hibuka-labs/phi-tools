@@ -47,7 +47,7 @@ impl Tool for BrowserWaitTool {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
-            let _session = session.lock().unwrap();
+            let _session = session.lock().unwrap_or_else(|e| e.into_inner());
             std::thread::sleep(Duration::from_millis(timeout));
             Ok(ToolOutput {
                 summary: format!("Waited {}ms.", timeout),
@@ -57,6 +57,6 @@ impl Tool for BrowserWaitTool {
             })
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_wait panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_wait failed: {}", e)))?
     }
 }

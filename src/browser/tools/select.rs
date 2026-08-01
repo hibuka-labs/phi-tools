@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 
 use crate::browser::session::BrowserSession;
+use crate::browser::tools::utils::resolve_selector;
 
 pub struct BrowserSelectTool {
     session: Arc<Mutex<BrowserSession>>,
@@ -57,37 +58,11 @@ impl Tool for BrowserSelectTool {
         let selector = args["selector"].as_str().map(String::from);
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
 
-            let css = match (index, selector) {
-                (Some(_), Some(_)) => {
-                    return Ok(ToolOutput {
-                        summary: "Cannot specify both 'index' and 'selector'.".to_string(),
-                        raw: None,
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    });
-                }
-                (None, None) => {
-                    return Ok(ToolOutput {
-                        summary: "Must specify either 'index' or 'selector'.".to_string(),
-                        raw: None,
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    });
-                }
-                (Some(idx), None) => match session.get_selector_for_index(idx) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        return Ok(ToolOutput {
-                            summary: format!("No element at index {}: {}", idx, e),
-                            raw: None,
-                            control_flow: ToolControlFlow::Continue,
-                            truncation: None,
-                        });
-                    }
-                },
-                (None, Some(s)) => s,
+            let css = match resolve_selector(&session, index, selector, "browser_select") {
+                Ok(s) => s,
+                Err(msg) => return Ok(msg),
             };
 
             match session.select_option(&css, &value) {
@@ -106,6 +81,6 @@ impl Tool for BrowserSelectTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_select panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_select failed: {}", e)))?
     }
 }

@@ -47,7 +47,7 @@ impl Tool for BrowserSwitchTabTool {
         let index = args["index"].as_u64().map(|i| i as usize).unwrap_or(0);
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
             let tabs = match session.get_tabs() {
                 Ok(t) => t,
                 Err(e) => {
@@ -93,6 +93,6 @@ impl Tool for BrowserSwitchTabTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_switch_tab panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_switch_tab failed: {}", e)))?
     }
 }

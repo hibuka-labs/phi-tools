@@ -40,7 +40,7 @@ impl Tool for BrowserReadLinksTool {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.read_links() {
                 Ok(links) => Ok(ToolOutput {
                     summary: format!("Page links:\n{}", links),
@@ -57,6 +57,6 @@ impl Tool for BrowserReadLinksTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_read_links panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_read_links failed: {}", e)))?
     }
 }

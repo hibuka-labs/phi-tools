@@ -40,7 +40,7 @@ impl Tool for BrowserCloseTabTool {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
-            let mut session = session.lock().unwrap();
+            let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.close_active_tab() {
                 Ok(_) => Ok(ToolOutput {
                     summary: "Tab closed.".to_string(),
@@ -57,6 +57,6 @@ impl Tool for BrowserCloseTabTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_close_tab panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_close_tab failed: {}", e)))?
     }
 }

@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 
 use crate::browser::session::BrowserSession;
+use crate::browser::tools::utils::resolve_selector;
 
 pub struct BrowserClickTool {
     session: Arc<Mutex<BrowserSession>>,
@@ -51,38 +52,11 @@ impl Tool for BrowserClickTool {
         let selector = args["selector"].as_str().map(String::from);
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
 
-            let css = match (index, selector) {
-                (Some(_), Some(_)) => {
-                    return Ok(ToolOutput {
-                        summary: "Cannot specify both 'index' and 'selector'. Use one or the other."
-                            .to_string(),
-                        raw: None,
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    });
-                }
-                (None, None) => {
-                    return Ok(ToolOutput {
-                        summary: "Must specify either 'index' or 'selector'.".to_string(),
-                        raw: None,
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    });
-                }
-                (Some(idx), None) => match session.get_selector_for_index(idx) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        return Ok(ToolOutput {
-                            summary: format!("No element at index {}: {}", idx, e),
-                            raw: None,
-                            control_flow: ToolControlFlow::Continue,
-                            truncation: None,
-                        });
-                    }
-                },
-                (None, Some(s)) => s,
+            let css = match resolve_selector(&session, index, selector, "browser_click") {
+                Ok(s) => s,
+                Err(msg) => return Ok(msg),
             };
 
             match session.click_element(&css) {
@@ -101,6 +75,6 @@ impl Tool for BrowserClickTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_click panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_click failed: {}", e)))?
     }
 }

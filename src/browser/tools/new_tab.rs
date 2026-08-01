@@ -48,7 +48,7 @@ impl Tool for BrowserNewTabTool {
         let url = normalize_url(args["url"].as_str().unwrap_or(""));
 
         tokio::task::spawn_blocking(move || {
-            let mut session = session.lock().unwrap();
+            let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
 
             match session.new_tab() {
                 Ok(_tab) => {
@@ -79,6 +79,6 @@ impl Tool for BrowserNewTabTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_new_tab panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_new_tab failed: {}", e)))?
     }
 }

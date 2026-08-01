@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 
 use crate::browser::session::BrowserSession;
+use crate::browser::tools::utils::resolve_selector;
 
 pub struct BrowserHoverTool {
     session: Arc<Mutex<BrowserSession>>,
@@ -51,9 +52,9 @@ impl Tool for BrowserHoverTool {
         let selector = args["selector"].as_str().map(String::from);
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
 
-            let css = match resolve_selector(&session, index, selector) {
+            let css = match resolve_selector(&session, index, selector, "browser_hover") {
                 Ok(s) => s,
                 Err(msg) => return Ok(msg),
             };
@@ -74,36 +75,6 @@ impl Tool for BrowserHoverTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_hover panic: {}", e)))?
-    }
-}
-
-fn resolve_selector(
-    session: &BrowserSession,
-    index: Option<usize>,
-    selector: Option<String>,
-) -> Result<String, ToolOutput> {
-    match (index, selector) {
-        (Some(_), Some(_)) => Err(ToolOutput {
-            summary: "Cannot specify both 'index' and 'selector'.".to_string(),
-            raw: None,
-            control_flow: ToolControlFlow::Continue,
-            truncation: None,
-        }),
-        (None, None) => Err(ToolOutput {
-            summary: "Must specify either 'index' or 'selector'.".to_string(),
-            raw: None,
-            control_flow: ToolControlFlow::Continue,
-            truncation: None,
-        }),
-        (Some(idx), None) => session
-            .get_selector_for_index(idx)
-            .map_err(|e| ToolOutput {
-                summary: format!("No element at index {}: {}", idx, e),
-                raw: None,
-                control_flow: ToolControlFlow::Continue,
-                truncation: None,
-            }),
-        (None, Some(s)) => Ok(s),
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_hover failed: {}", e)))?
     }
 }

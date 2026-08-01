@@ -40,7 +40,7 @@ impl Tool for BrowserScreenshotTool {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.screenshot() {
                 Ok(data) => Ok(ToolOutput {
                     summary: format!(
@@ -60,6 +60,6 @@ impl Tool for BrowserScreenshotTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_screenshot panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_screenshot failed: {}", e)))?
     }
 }

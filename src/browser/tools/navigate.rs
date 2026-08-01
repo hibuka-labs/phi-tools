@@ -48,15 +48,7 @@ impl Tool for BrowserNavigateTool {
         let url = normalize_url(args["url"].as_str().unwrap_or(""));
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
-            if !session.is_alive() {
-                return Ok(ToolOutput {
-                    summary: "Browser session is closed.".to_string(),
-                    raw: None,
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                });
-            }
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
 
             match session.navigate(&url) {
                 Ok(_) => {
@@ -94,6 +86,6 @@ impl Tool for BrowserNavigateTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_navigate panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_navigate failed: {}", e)))?
     }
 }

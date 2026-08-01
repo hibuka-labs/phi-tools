@@ -41,7 +41,7 @@ impl Tool for BrowserTabListTool {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap();
+            let session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.get_tabs() {
                 Ok(tabs) => {
                     let mut output = String::new();
@@ -83,7 +83,7 @@ impl Tool for BrowserTabListTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_tab_list panic: {}", e)))?
+        .map_err(|e| agent_base::AgentError::Internal(format!("browser_tab_list failed: {}", e)))?
     }
 }
 
