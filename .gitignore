@@ -8,6 +8,9 @@
 *.swo
 *~
 
+# Documentation (specs, design docs — local only, not committed)
+docs/
+
 # OS files
 .DS_Store
 Thumbs.db
