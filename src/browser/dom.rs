@@ -514,8 +514,7 @@ mod tests {
                 .with_box(true, None),
         )));
         root.children.push(AriaChild::Node(Box::new(
-            AriaNode::new("paragraph", "")
-                .with_child(AriaChild::Text("Some text".to_string())),
+            AriaNode::new("paragraph", "").with_child(AriaChild::Text("Some text".to_string())),
         )));
         root
     }
@@ -533,8 +532,7 @@ mod tests {
 
     #[test]
     fn test_has_pointer_cursor() {
-        let with_pointer = AriaNode::new("button", "")
-            .with_box(true, Some("pointer".to_string()));
+        let with_pointer = AriaNode::new("button", "").with_box(true, Some("pointer".to_string()));
         assert!(with_pointer.has_pointer_cursor());
     }
 

@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 
 use crate::browser::session::BrowserSession;
-use crate::browser::tools::utils::{normalize_url, render_aria_tree, RenderMode};
+use crate::browser::tools::utils::{RenderMode, normalize_url, render_aria_tree};
 
 pub struct BrowserNavigateTool {
     session: Arc<Mutex<BrowserSession>>,

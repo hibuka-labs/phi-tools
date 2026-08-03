@@ -49,16 +49,11 @@ impl Tool for BrowserTabListTool {
 
                     for (i, tab) in tabs.iter().enumerate() {
                         let url = get_page_url(tab);
-                        let title = tab
-                            .get_title()
-                            .unwrap_or_else(|_| "unknown".to_string());
+                        let title = tab.get_title().unwrap_or_else(|_| "unknown".to_string());
                         let active = url == get_active_url(&session);
                         let marker = if active { " [active]" } else { "" };
 
-                        output.push_str(&format!(
-                            "[{}]{} {}\n    {}\n",
-                            i, marker, title, url
-                        ));
+                        output.push_str(&format!("[{}]{} {}\n    {}\n", i, marker, title, url));
                         tab_data.push(json!({
                             "index": i,
                             "title": title,

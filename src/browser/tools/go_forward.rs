@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 
 use crate::browser::session::BrowserSession;
-use crate::browser::tools::utils::{render_aria_tree, RenderMode};
+use crate::browser::tools::utils::{RenderMode, render_aria_tree};
 
 pub struct BrowserGoForwardTool {
     session: Arc<Mutex<BrowserSession>>,
@@ -64,6 +64,8 @@ impl Tool for BrowserGoForwardTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_go_forward failed: {}", e)))?
+        .map_err(|e| {
+            agent_base::AgentError::Internal(format!("browser_go_forward failed: {}", e))
+        })?
     }
 }

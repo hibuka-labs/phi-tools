@@ -81,6 +81,8 @@ impl Tool for BrowserInputTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_input_fill failed: {}", e)))?
+        .map_err(|e| {
+            agent_base::AgentError::Internal(format!("browser_input_fill failed: {}", e))
+        })?
     }
 }

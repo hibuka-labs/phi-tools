@@ -62,11 +62,7 @@ impl Tool for BrowserSwitchTabTool {
 
             if index >= tabs.len() {
                 return Ok(ToolOutput {
-                    summary: format!(
-                        "Tab index {} out of range ({} tabs).",
-                        index,
-                        tabs.len()
-                    ),
+                    summary: format!("Tab index {} out of range ({} tabs).", index, tabs.len()),
                     raw: None,
                     control_flow: ToolControlFlow::Continue,
                     truncation: None,
@@ -93,6 +89,8 @@ impl Tool for BrowserSwitchTabTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_switch_tab failed: {}", e)))?
+        .map_err(|e| {
+            agent_base::AgentError::Internal(format!("browser_switch_tab failed: {}", e))
+        })?
     }
 }

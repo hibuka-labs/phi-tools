@@ -51,25 +51,23 @@ impl Tool for BrowserNewTabTool {
             let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
 
             match session.new_tab() {
-                Ok(_tab) => {
-                    match session.navigate(&url) {
-                        Ok(_) => {
-                            let _ = session.wait_for_navigation();
-                            Ok(ToolOutput {
-                                summary: format!("Opened new tab and navigated to {}.", url),
-                                raw: Some(json!({"url": url, "success": true})),
-                                control_flow: ToolControlFlow::Continue,
-                                truncation: None,
-                            })
-                        }
-                        Err(e) => Ok(ToolOutput {
-                            summary: format!("New tab opened but navigation failed: {}", e),
-                            raw: Some(json!({"success": false, "error": e})),
+                Ok(_tab) => match session.navigate(&url) {
+                    Ok(_) => {
+                        let _ = session.wait_for_navigation();
+                        Ok(ToolOutput {
+                            summary: format!("Opened new tab and navigated to {}.", url),
+                            raw: Some(json!({"url": url, "success": true})),
                             control_flow: ToolControlFlow::Continue,
                             truncation: None,
-                        }),
+                        })
                     }
-                }
+                    Err(e) => Ok(ToolOutput {
+                        summary: format!("New tab opened but navigation failed: {}", e),
+                        raw: Some(json!({"success": false, "error": e})),
+                        control_flow: ToolControlFlow::Continue,
+                        truncation: None,
+                    }),
+                },
                 Err(e) => Ok(ToolOutput {
                     summary: format!("Failed to open new tab: {}", e),
                     raw: Some(json!({"success": false, "error": e})),

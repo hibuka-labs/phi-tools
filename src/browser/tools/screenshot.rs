@@ -43,10 +43,7 @@ impl Tool for BrowserScreenshotTool {
             let session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.screenshot() {
                 Ok(data) => Ok(ToolOutput {
-                    summary: format!(
-                        "Screenshot captured ({} bytes base64 PNG).",
-                        data.len()
-                    ),
+                    summary: format!("Screenshot captured ({} bytes base64 PNG).", data.len()),
                     raw: Some(json!({"screenshot": data, "format": "png", "encoding": "base64"})),
                     control_flow: ToolControlFlow::Continue,
                     truncation: None,
@@ -60,6 +57,8 @@ impl Tool for BrowserScreenshotTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_screenshot failed: {}", e)))?
+        .map_err(|e| {
+            agent_base::AgentError::Internal(format!("browser_screenshot failed: {}", e))
+        })?
     }
 }

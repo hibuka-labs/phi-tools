@@ -47,10 +47,7 @@ impl Tool for BrowserScrollTool {
 
     async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
         let session = self.session.clone();
-        let direction = args["direction"]
-            .as_str()
-            .unwrap_or("down")
-            .to_string();
+        let direction = args["direction"].as_str().unwrap_or("down").to_string();
         let amount = args["amount"].as_u64().unwrap_or(500) as u32;
 
         tokio::task::spawn_blocking(move || {

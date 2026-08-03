@@ -28,14 +28,14 @@ pub mod browser;
 
 #[cfg(feature = "browser")]
 pub use browser::{
+    BrowserToolset,
     config::{ConnectionOptions, LaunchOptions},
     tools::{
         BrowserClickTool, BrowserCloseTabTool, BrowserCloseTool, BrowserEvaluateTool,
         BrowserExtractTool, BrowserGetMarkdownTool, BrowserGoBackTool, BrowserGoForwardTool,
         BrowserHoverTool, BrowserInputTool, BrowserNavigateTool, BrowserNewTabTool,
-        BrowserPressKeyTool, BrowserReadLinksTool, BrowserScreenshotTool, BrowserScrollTool,
-        BrowserSelectTool, BrowserSnapshotTool, BrowserSwitchTabTool, BrowserTabListTool,
-        BrowserWaitTool,
+        BrowserPressKeyTool, BrowserReadLinksTool, BrowserRestartTool, BrowserScreenshotTool,
+        BrowserScrollTool, BrowserSelectTool, BrowserSnapshotTool, BrowserSwitchTabTool,
+        BrowserTabListTool, BrowserWaitTool,
     },
-    BrowserToolset,
 };

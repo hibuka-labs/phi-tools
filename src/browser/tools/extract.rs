@@ -83,6 +83,8 @@ impl Tool for BrowserExtractTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_extract_content failed: {}", e)))?
+        .map_err(|e| {
+            agent_base::AgentError::Internal(format!("browser_extract_content failed: {}", e))
+        })?
     }
 }

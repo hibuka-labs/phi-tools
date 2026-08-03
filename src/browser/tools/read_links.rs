@@ -57,6 +57,8 @@ impl Tool for BrowserReadLinksTool {
             }
         })
         .await
-        .map_err(|e| agent_base::AgentError::Internal(format!("browser_read_links failed: {}", e)))?
+        .map_err(|e| {
+            agent_base::AgentError::Internal(format!("browser_read_links failed: {}", e))
+        })?
     }
 }

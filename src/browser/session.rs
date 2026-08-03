@@ -16,9 +16,18 @@ use log;
 use super::config::{ConnectionOptions, LaunchOptions};
 use super::dom::DomTree;
 
+/// How this browser was created, so `restart()` can recreate it from scratch.
+#[derive(Clone)]
+enum SessionConfig {
+    Launch(LaunchOptions),
+    Connect(ConnectionOptions),
+}
+
 /// Browser session wrapping a Chrome/Chromium instance via CDP.
 pub struct BrowserSession {
-    browser: Browser,
+    /// `None` when the browser has been closed or killed (allows restart to swap in a new one).
+    browser: Option<Browser>,
+    config: SessionConfig,
 }
 
 impl BrowserSession {
@@ -26,6 +35,25 @@ impl BrowserSession {
 
     /// Launch a new browser instance.
     pub fn launch(options: LaunchOptions) -> Result<Self, String> {
+        let browser = Self::spawn(&options)?;
+        Ok(Self {
+            browser: Some(browser),
+            config: SessionConfig::Launch(options),
+        })
+    }
+
+    /// Connect to an existing browser instance via WebSocket.
+    pub fn connect(options: ConnectionOptions) -> Result<Self, String> {
+        let browser = Browser::connect(options.ws_url.clone())
+            .map_err(|e| format!("Failed to connect to browser: {}", e))?;
+        Ok(Self {
+            browser: Some(browser),
+            config: SessionConfig::Connect(options),
+        })
+    }
+
+    /// Launch a fresh Chrome instance from stored options and create an initial tab.
+    fn spawn(options: &LaunchOptions) -> Result<Browser, String> {
         let mut launch_opts = ChromeLaunchOptions::default();
 
         // Anti-bot detection mitigation
@@ -42,44 +70,60 @@ impl BrowserSession {
         launch_opts.headless = options.headless;
         launch_opts.window_size = Some((options.window_width, options.window_height));
 
-        if let Some(path) = options.chrome_path {
+        if let Some(path) = options.chrome_path.clone() {
             launch_opts.path = Some(path);
         }
-        if let Some(dir) = options.user_data_dir {
+        if let Some(dir) = options.user_data_dir.clone() {
             launch_opts.user_data_dir = Some(dir);
         }
         launch_opts.sandbox = options.sandbox;
 
-        let browser = Browser::new(launch_opts)
-            .map_err(|e| format!("Failed to launch browser: {}", e))?;
+        let browser =
+            Browser::new(launch_opts).map_err(|e| format!("Failed to launch browser: {}", e))?;
 
         // Create an initial tab
         browser
             .new_tab()
             .map_err(|e| format!("Failed to create initial tab: {}", e))?;
 
-        Ok(Self {
-            browser,
+        Ok(browser)
+    }
+
+    /// Restart the browser: tear down the current instance (if any) and relaunch
+    /// with the same options that created it. This is the safe way for the agent to
+    /// recover when Chrome is unresponsive, crashed, or was killed externally — it
+    /// replaces the internal `Browser`, so all shared tools see the new instance.
+    pub fn restart(&mut self) -> Result<(), String> {
+        let _ = self.close();
+
+        let browser = match &self.config {
+            SessionConfig::Launch(opts) => Self::spawn(opts)?,
+            SessionConfig::Connect(opts) => Browser::connect(opts.ws_url.clone())
+                .map_err(|e| format!("Failed to connect to browser: {}", e))?,
+        };
+        self.browser = Some(browser);
+        Ok(())
+    }
+
+    /// Access the live browser, or a clear error pointing at the recovery tool.
+    fn browser(&self) -> Result<&Browser, String> {
+        self.browser.as_ref().ok_or_else(|| {
+            "Browser is not running (it was closed or killed). Use browser_restart to relaunch."
+                .to_string()
         })
     }
 
-    /// Connect to an existing browser instance via WebSocket.
-    pub fn connect(options: ConnectionOptions) -> Result<Self, String> {
-        let browser = Browser::connect(options.ws_url)
-            .map_err(|e| format!("Failed to connect to browser: {}", e))?;
-
-        Ok(Self {
-            browser,
-        })
-    }
-
-    /// Close the browser.
+    /// Close the browser. Tolerates a dead/unresponsive connection.
     pub fn close(&mut self) -> Result<(), String> {
-        // Close all tabs — the browser process exits when all tabs are closed.
-        let tabs = self.get_tabs()?;
-        for tab in tabs {
-            let _ = tab.close(false);
+        if let Some(browser) = self.browser.as_ref() {
+            // Close all tabs — the browser process exits when all tabs are closed.
+            if let Ok(tabs) = browser.get_tabs().lock().map(|t| t.clone()) {
+                for tab in tabs {
+                    let _ = tab.close(false);
+                }
+            }
         }
+        self.browser = None;
         Ok(())
     }
 
@@ -92,14 +136,14 @@ impl BrowserSession {
 
     /// Create a new tab.
     pub fn new_tab(&mut self) -> Result<Arc<Tab>, String> {
-        self.browser
+        self.browser()?
             .new_tab()
             .map_err(|e| format!("Failed to create tab: {}", e))
     }
 
     /// Get all open tabs.
     pub fn get_tabs(&self) -> Result<Vec<Arc<Tab>>, String> {
-        self.browser
+        self.browser()?
             .get_tabs()
             .lock()
             .map_err(|e| format!("Failed to get tabs: {}", e))
@@ -353,9 +397,7 @@ impl BrowserSession {
             .evaluate(script, false)
             .map_err(|e| format!("JavaScript evaluation failed: {}", e))?;
 
-        let value = result
-            .value
-            .unwrap_or(serde_json::Value::Null);
+        let value = result.value.unwrap_or(serde_json::Value::Null);
         Ok(value)
     }
 
@@ -388,13 +430,13 @@ impl BrowserSession {
             })));
         })()"#;
 
-        let result = self.tab()?
+        let result = self
+            .tab()?
             .evaluate(js, false)
             .map_err(|e| format!("Failed to read links: {}", e))?;
 
         let value = result.value.unwrap_or(serde_json::Value::Null);
-        let links: Vec<serde_json::Value> =
-            serde_json::from_value(value).unwrap_or_default();
+        let links: Vec<serde_json::Value> = serde_json::from_value(value).unwrap_or_default();
 
         let mut output = String::new();
         for link in &links {
@@ -422,8 +464,8 @@ mod tests {
     #[test]
     #[ignore] // Requires Chrome installed
     fn test_launch_and_navigate() {
-        let session = BrowserSession::launch(LaunchOptions::default())
-            .expect("Failed to launch browser");
+        let session =
+            BrowserSession::launch(LaunchOptions::default()).expect("Failed to launch browser");
         assert!(session.get_tabs().is_ok());
 
         session.navigate("about:blank").expect("Navigation failed");
@@ -433,13 +475,31 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn test_extract_dom() {
-        let session = BrowserSession::launch(LaunchOptions::default())
-            .expect("Failed to launch browser");
+    #[ignore] // Requires Chrome installed
+    fn test_restart_replaces_browser() {
+        let mut session =
+            BrowserSession::launch(LaunchOptions::default()).expect("Failed to launch browser");
+        let first_tab_count = session.get_tabs().expect("tabs").len();
+        assert!(first_tab_count >= 1);
+
+        // Restart should tear down the old instance and bring up a fresh one.
+        session.restart().expect("Failed to restart browser");
+        let new_tabs = session.get_tabs().expect("tabs after restart");
+        assert!(!new_tabs.is_empty(), "restart must leave a usable browser");
+
+        // The fresh browser can navigate.
         session
             .navigate("about:blank")
-            .expect("Navigation failed");
+            .expect("Navigation failed after restart");
+        session.wait_for_navigation().expect("Wait after restart");
+    }
+
+    #[test]
+    #[ignore]
+    fn test_extract_dom() {
+        let session =
+            BrowserSession::launch(LaunchOptions::default()).expect("Failed to launch browser");
+        session.navigate("about:blank").expect("Navigation failed");
         session
             .wait_for_navigation()
             .expect("Wait for navigation failed");
@@ -451,11 +511,9 @@ mod tests {
     #[test]
     #[ignore]
     fn test_screenshot() {
-        let session = BrowserSession::launch(LaunchOptions::default())
-            .expect("Failed to launch browser");
-        session
-            .navigate("about:blank")
-            .expect("Navigation failed");
+        let session =
+            BrowserSession::launch(LaunchOptions::default()).expect("Failed to launch browser");
+        session.navigate("about:blank").expect("Navigation failed");
 
         let data = session.screenshot().expect("Screenshot failed");
         assert!(!data.is_empty());

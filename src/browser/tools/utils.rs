@@ -198,10 +198,7 @@ mod tests {
     #[test]
     fn test_normalize_url() {
         assert_eq!(normalize_url("example.com"), "https://example.com");
-        assert_eq!(
-            normalize_url("https://example.com"),
-            "https://example.com"
-        );
+        assert_eq!(normalize_url("https://example.com"), "https://example.com");
         assert_eq!(normalize_url("about:blank"), "about:blank");
     }
 
