@@ -91,6 +91,16 @@ impl Tool for LocalShellTool {
         })
     }
 
+    fn metadata(&self) -> agent_base::ToolMetadata {
+        agent_base::ToolMetadata {
+            name: self.name().to_string(),
+            description: "Execute a shell command locally. Use for file operations, code compilation, Git operations, system info queries, etc.".to_string(),
+            origin: "phi-tools".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            requirements: vec![],
+        }
+    }
+
     async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
         let command = args
             .get("command")
