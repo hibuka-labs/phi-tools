@@ -6,7 +6,7 @@ description = "General-purpose Agent toolset — local shell, file operations, a
 license = "MIT"
 repository = "https://github.com/hibuka-labs/phi-tools"
 readme = "README.md"
-keywords = ["agent", "ai", "llm", "tool", "shell", "browser"]
+keywords = ["agent", "ai", "tool", "shell", "browser"]
 categories = ["development-tools", "asynchronous"]
 
 [features]
