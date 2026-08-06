@@ -39,3 +39,45 @@ pub use browser::{
         BrowserTabListTool, BrowserWaitTool,
     },
 };
+
+// ── Ergonomic aliases ──
+
+/// Alias for [`LaunchOptions`] — more self-documenting in CLI code.
+#[cfg(feature = "browser")]
+pub type BrowserLaunchOptions = LaunchOptions;
+
+/// Alias for [`ConnectionOptions`].
+#[cfg(feature = "browser")]
+pub type BrowserConnectionOptions = ConnectionOptions;
+
+/// Register all 21 browser-automation tools on the builder.
+#[cfg(feature = "browser")]
+pub fn register_browser_tools(
+    builder: agent_base::AgentBuilder,
+    browser: &BrowserToolset,
+) -> agent_base::AgentBuilder {
+    let session = browser.session();
+    builder
+        .register_tool(BrowserNavigateTool::new(session.clone()))
+        .register_tool(BrowserClickTool::new(session.clone()))
+        .register_tool(BrowserInputTool::new(session.clone()))
+        .register_tool(BrowserScrollTool::new(session.clone()))
+        .register_tool(BrowserHoverTool::new(session.clone()))
+        .register_tool(BrowserSelectTool::new(session.clone()))
+        .register_tool(BrowserPressKeyTool::new(session.clone()))
+        .register_tool(BrowserScreenshotTool::new(session.clone()))
+        .register_tool(BrowserSnapshotTool::new(session.clone()))
+        .register_tool(BrowserEvaluateTool::new(session.clone()))
+        .register_tool(BrowserExtractTool::new(session.clone()))
+        .register_tool(BrowserGetMarkdownTool::new(session.clone()))
+        .register_tool(BrowserReadLinksTool::new(session.clone()))
+        .register_tool(BrowserGoBackTool::new(session.clone()))
+        .register_tool(BrowserGoForwardTool::new(session.clone()))
+        .register_tool(BrowserNewTabTool::new(session.clone()))
+        .register_tool(BrowserCloseTabTool::new(session.clone()))
+        .register_tool(BrowserSwitchTabTool::new(session.clone()))
+        .register_tool(BrowserTabListTool::new(session.clone()))
+        .register_tool(BrowserWaitTool::new(session.clone()))
+        .register_tool(BrowserCloseTool::new(session.clone()))
+        .register_tool(BrowserRestartTool::new(session.clone()))
+}
