@@ -11,6 +11,8 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 [[package]]
 name = "agent-base"
 version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d892e9c1fec201a9906d4d1f7ae45f227a9d009b1d78e88fbca684a7f5712761"
 dependencies = [
  "anyhow",
  "async-trait",
