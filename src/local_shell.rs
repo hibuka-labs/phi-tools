@@ -135,7 +135,7 @@ impl Tool for LocalShellTool {
         }
 
         // spawn + timeout + kill pattern: explicitly kill child process on timeout
-        let mut child = match cmd.spawn() {
+        let child = match cmd.spawn() {
             Ok(c) => c,
             Err(e) => {
                 tracing::error!(error = %e, command = %command, "execute_command: spawn failed");
