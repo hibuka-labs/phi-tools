@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
+use agent_base::{AgentResult, Content, Tool, ToolContext};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
@@ -23,35 +23,32 @@ impl Tool for BrowserSelectTool {
         "browser_select"
     }
 
-    fn definition(&self) -> Value {
+    fn description(&self) -> &'static str {
+        "Select an option in a dropdown (select) element. Use the index from the page snapshot or a CSS selector."
+    }
+
+    fn schema(&self) -> Value {
         json!({
-            "type": "function",
-            "function": {
-                "name": "browser_select",
-                "description": "Select an option in a dropdown (select) element. Use the index from the page snapshot or a CSS selector.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "index": {
-                            "type": "integer",
-                            "description": "Element index from the page snapshot. Use either index or selector."
-                        },
-                        "selector": {
-                            "type": "string",
-                            "description": "CSS selector for the select element. Use either index or selector."
-                        },
-                        "value": {
-                            "type": "string",
-                            "description": "The option value to select"
-                        }
-                    },
-                    "required": ["value"]
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer",
+                    "description": "Element index from the page snapshot. Use either index or selector."
+                },
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector for the select element. Use either index or selector."
+                },
+                "value": {
+                    "type": "string",
+                    "description": "The option value to select"
                 }
-            }
+            },
+            "required": ["value"]
         })
     }
 
-    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
+    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
         let value = args["value"].as_str().unwrap_or("").to_string();
         let index = args["index"].as_u64().map(|i| i as usize);
@@ -62,22 +59,18 @@ impl Tool for BrowserSelectTool {
 
             let css = match resolve_selector(&session, index, selector, "browser_select") {
                 Ok(s) => s,
-                Err(msg) => return Ok(msg),
+                Err(msg) => return Ok(vec![Content::text(msg)]),
             };
 
             match session.select_option(&css, &value) {
-                Ok(_) => Ok(ToolOutput {
-                    summary: format!("Selected '{}' in: {}", value, css),
-                    raw: Some(json!({"selector": css, "value": value, "success": true})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
-                Err(e) => Ok(ToolOutput {
-                    summary: format!("Select failed on '{}': {}", css, e),
-                    raw: Some(json!({"selector": css, "success": false, "error": e})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
+                Ok(_) => Ok(vec![Content::text(format!(
+                    "Selected '{}' in: {}",
+                    value, css
+                ))]),
+                Err(e) => Ok(vec![Content::text(format!(
+                    "Select failed on '{}': {}",
+                    css, e
+                ))]),
             }
         })
         .await

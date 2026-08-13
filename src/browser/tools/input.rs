@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
+use agent_base::{AgentResult, Content, Tool, ToolContext};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
@@ -23,35 +23,32 @@ impl Tool for BrowserInputTool {
         "browser_input_fill"
     }
 
-    fn definition(&self) -> Value {
+    fn description(&self) -> &'static str {
+        "Type text into an input element. Use the index from the page snapshot (preferred) or a CSS selector."
+    }
+
+    fn schema(&self) -> Value {
         json!({
-            "type": "function",
-            "function": {
-                "name": "browser_input_fill",
-                "description": "Type text into an input element. Use the index from the page snapshot (preferred) or a CSS selector.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "index": {
-                            "type": "integer",
-                            "description": "Element index from the page snapshot (preferred). Use either index or selector."
-                        },
-                        "selector": {
-                            "type": "string",
-                            "description": "CSS selector for the element. Use either index or selector."
-                        },
-                        "text": {
-                            "type": "string",
-                            "description": "The text to type into the element"
-                        }
-                    },
-                    "required": ["text"]
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer",
+                    "description": "Element index from the page snapshot (preferred). Use either index or selector."
+                },
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector for the element. Use either index or selector."
+                },
+                "text": {
+                    "type": "string",
+                    "description": "The text to type into the element"
                 }
-            }
+            },
+            "required": ["text"]
         })
     }
 
-    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
+    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
         let text = args["text"].as_str().unwrap_or("").to_string();
         let index = args["index"].as_u64().map(|i| i as usize);
@@ -62,22 +59,18 @@ impl Tool for BrowserInputTool {
 
             let css = match resolve_selector(&session, index, selector, "browser_input_fill") {
                 Ok(s) => s,
-                Err(msg) => return Ok(msg),
+                Err(msg) => return Ok(vec![Content::text(msg)]),
             };
 
             match session.type_text(&css, &text) {
-                Ok(_) => Ok(ToolOutput {
-                    summary: format!("Typed '{}' into: {}", text, css),
-                    raw: Some(json!({"selector": css, "text": text, "success": true})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
-                Err(e) => Ok(ToolOutput {
-                    summary: format!("Input failed on '{}': {}", css, e),
-                    raw: Some(json!({"selector": css, "success": false, "error": e})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
+                Ok(_) => Ok(vec![Content::text(format!(
+                    "Typed '{}' into: {}",
+                    text, css
+                ))]),
+                Err(e) => Ok(vec![Content::text(format!(
+                    "Input failed on '{}': {}",
+                    css, e
+                ))]),
             }
         })
         .await

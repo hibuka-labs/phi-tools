@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
+use agent_base::{AgentResult, Content, Tool, ToolContext};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
@@ -22,45 +22,32 @@ impl Tool for BrowserPressKeyTool {
         "browser_press_key"
     }
 
-    fn definition(&self) -> Value {
+    fn description(&self) -> &'static str {
+        "Press a keyboard key. Common keys: Enter, Escape, Tab, ArrowDown, ArrowUp, ArrowLeft, ArrowRight, Backspace, Delete, PageDown, PageUp, Home, End."
+    }
+
+    fn schema(&self) -> Value {
         json!({
-            "type": "function",
-            "function": {
-                "name": "browser_press_key",
-                "description": "Press a keyboard key. Common keys: Enter, Escape, Tab, ArrowDown, ArrowUp, ArrowLeft, ArrowRight, Backspace, Delete, PageDown, PageUp, Home, End.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "key": {
-                            "type": "string",
-                            "description": "The key to press (e.g., 'Enter', 'Escape', 'Tab', 'ArrowDown')"
-                        }
-                    },
-                    "required": ["key"]
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "The key to press (e.g., 'Enter', 'Escape', 'Tab', 'ArrowDown')"
                 }
-            }
+            },
+            "required": ["key"]
         })
     }
 
-    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
+    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
         let key = args["key"].as_str().unwrap_or("").to_string();
 
         tokio::task::spawn_blocking(move || {
             let session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.press_key(&key) {
-                Ok(_) => Ok(ToolOutput {
-                    summary: format!("Pressed key: {}", key),
-                    raw: Some(json!({"key": key, "success": true})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
-                Err(e) => Ok(ToolOutput {
-                    summary: format!("Press key failed: {}", e),
-                    raw: Some(json!({"key": key, "success": false, "error": e})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
+                Ok(_) => Ok(vec![Content::text(format!("Pressed key: {}", key))]),
+                Err(e) => Ok(vec![Content::text(format!("Press key failed: {}", e))]),
             }
         })
         .await

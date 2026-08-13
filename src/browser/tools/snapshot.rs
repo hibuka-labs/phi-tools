@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
+use agent_base::{AgentResult, Content, Tool, ToolContext};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
@@ -23,21 +23,18 @@ impl Tool for BrowserSnapshotTool {
         "browser_snapshot"
     }
 
-    fn definition(&self) -> Value {
+    fn description(&self) -> &'static str {
+        "Get an accessibility snapshot of the current page, with numbered interactive elements. Use this to see what's on the page and find element indices for interaction tools."
+    }
+
+    fn schema(&self) -> Value {
         json!({
-            "type": "function",
-            "function": {
-                "name": "browser_snapshot",
-                "description": "Get an accessibility snapshot of the current page, with numbered interactive elements. Use this to see what's on the page and find element indices for interaction tools.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {}
-                }
-            }
+            "type": "object",
+            "properties": {}
         })
     }
 
-    async fn call(&self, _args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
+    async fn call(&self, _args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
@@ -46,22 +43,15 @@ impl Tool for BrowserSnapshotTool {
                 Ok(dom) => {
                     let count = dom.count_interactive();
                     let snapshot = render_aria_tree(&dom.root, RenderMode::Ai, None);
-                    Ok(ToolOutput {
-                        summary: format!(
-                            "Page snapshot ({} interactive elements):\n{}",
-                            count, snapshot
-                        ),
-                        raw: Some(json!({"interactive_count": count})),
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    })
+                    Ok(vec![Content::text(format!(
+                        "Page snapshot ({} interactive elements):\n{}",
+                        count, snapshot
+                    ))])
                 }
-                Err(e) => Ok(ToolOutput {
-                    summary: format!("Failed to capture snapshot: {}", e),
-                    raw: None,
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
+                Err(e) => Ok(vec![Content::text(format!(
+                    "Failed to capture snapshot: {}",
+                    e
+                ))]),
             }
         })
         .await

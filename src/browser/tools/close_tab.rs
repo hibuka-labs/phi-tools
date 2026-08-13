@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
+use agent_base::{AgentResult, Content, Tool, ToolContext};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
@@ -22,38 +22,25 @@ impl Tool for BrowserCloseTabTool {
         "browser_close_tab"
     }
 
-    fn definition(&self) -> Value {
+    fn description(&self) -> &'static str {
+        "Close the current active tab. If it's the last tab, the browser session will end."
+    }
+
+    fn schema(&self) -> Value {
         json!({
-            "type": "function",
-            "function": {
-                "name": "browser_close_tab",
-                "description": "Close the current active tab. If it's the last tab, the browser session will end.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {}
-                }
-            }
+            "type": "object",
+            "properties": {}
         })
     }
 
-    async fn call(&self, _args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
+    async fn call(&self, _args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
             let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.close_active_tab() {
-                Ok(_) => Ok(ToolOutput {
-                    summary: "Tab closed.".to_string(),
-                    raw: Some(json!({"success": true})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
-                Err(e) => Ok(ToolOutput {
-                    summary: format!("Failed to close tab: {}", e),
-                    raw: Some(json!({"success": false, "error": e})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
+                Ok(_) => Ok(vec![Content::text("Tab closed.".to_string())]),
+                Err(e) => Ok(vec![Content::text(format!("Failed to close tab: {}", e))]),
             }
         })
         .await

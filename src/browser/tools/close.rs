@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
+use agent_base::{AgentResult, Content, Tool, ToolContext};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
@@ -22,38 +22,28 @@ impl Tool for BrowserCloseTool {
         "browser_close"
     }
 
-    fn definition(&self) -> Value {
+    fn description(&self) -> &'static str {
+        "Close the browser and end the session. Use this when the browsing task is complete."
+    }
+
+    fn schema(&self) -> Value {
         json!({
-            "type": "function",
-            "function": {
-                "name": "browser_close",
-                "description": "Close the browser and end the session. Use this when the browsing task is complete.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {}
-                }
-            }
+            "type": "object",
+            "properties": {}
         })
     }
 
-    async fn call(&self, _args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
+    async fn call(&self, _args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
             let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.close() {
-                Ok(_) => Ok(ToolOutput {
-                    summary: "Browser closed.".to_string(),
-                    raw: Some(json!({"success": true})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
-                Err(e) => Ok(ToolOutput {
-                    summary: format!("Failed to close browser: {}", e),
-                    raw: Some(json!({"success": false, "error": e})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
+                Ok(_) => Ok(vec![Content::text("Browser closed.".to_string())]),
+                Err(e) => Ok(vec![Content::text(format!(
+                    "Failed to close browser: {}",
+                    e
+                ))]),
             }
         })
         .await

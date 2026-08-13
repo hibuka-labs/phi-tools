@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
+use agent_base::{AgentResult, Content, Tool, ToolContext};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
@@ -22,27 +22,24 @@ impl Tool for BrowserSwitchTabTool {
         "browser_switch_tab"
     }
 
-    fn definition(&self) -> Value {
+    fn description(&self) -> &'static str {
+        "Switch to a specific tab by its index (from browser_tab_list)."
+    }
+
+    fn schema(&self) -> Value {
         json!({
-            "type": "function",
-            "function": {
-                "name": "browser_switch_tab",
-                "description": "Switch to a specific tab by its index (from browser_tab_list).",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "index": {
-                            "type": "integer",
-                            "description": "Tab index from browser_tab_list"
-                        }
-                    },
-                    "required": ["index"]
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer",
+                    "description": "Tab index from browser_tab_list"
                 }
-            }
+            },
+            "required": ["index"]
         })
     }
 
-    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
+    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
         let index = args["index"].as_u64().map(|i| i as usize).unwrap_or(0);
 
@@ -51,41 +48,31 @@ impl Tool for BrowserSwitchTabTool {
             let tabs = match session.get_tabs() {
                 Ok(t) => t,
                 Err(e) => {
-                    return Ok(ToolOutput {
-                        summary: format!("Failed to get tabs: {}", e),
-                        raw: None,
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    });
+                    return Ok(vec![Content::text(format!("Failed to get tabs: {}", e))]);
                 }
             };
 
             if index >= tabs.len() {
-                return Ok(ToolOutput {
-                    summary: format!("Tab index {} out of range ({} tabs).", index, tabs.len()),
-                    raw: None,
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                });
+                return Ok(vec![Content::text(format!(
+                    "Tab index {} out of range ({} tabs).",
+                    index,
+                    tabs.len()
+                ))]);
             }
 
             let tab = &tabs[index];
             match tab.activate() {
                 Ok(_) => {
                     let title = tab.get_title().unwrap_or_default();
-                    Ok(ToolOutput {
-                        summary: format!("Switched to tab [{}]: {}", index, title),
-                        raw: Some(json!({"index": index, "title": title, "success": true})),
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    })
+                    Ok(vec![Content::text(format!(
+                        "Switched to tab [{}]: {}",
+                        index, title
+                    ))])
                 }
-                Err(e) => Ok(ToolOutput {
-                    summary: format!("Failed to switch to tab {}: {}", index, e),
-                    raw: Some(json!({"success": false, "error": e.to_string()})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
+                Err(e) => Ok(vec![Content::text(format!(
+                    "Failed to switch to tab {}: {}",
+                    index, e
+                ))]),
             }
         })
         .await

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
+use agent_base::{AgentResult, Content, Tool, ToolContext};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
@@ -23,21 +23,18 @@ impl Tool for BrowserTabListTool {
         "browser_tab_list"
     }
 
-    fn definition(&self) -> Value {
+    fn description(&self) -> &'static str {
+        "List all open browser tabs with their titles, URLs, and indices."
+    }
+
+    fn schema(&self) -> Value {
         json!({
-            "type": "function",
-            "function": {
-                "name": "browser_tab_list",
-                "description": "List all open browser tabs with their titles, URLs, and indices.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {}
-                }
-            }
+            "type": "object",
+            "properties": {}
         })
     }
 
-    async fn call(&self, _args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
+    async fn call(&self, _args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
@@ -45,7 +42,6 @@ impl Tool for BrowserTabListTool {
             match session.get_tabs() {
                 Ok(tabs) => {
                     let mut output = String::new();
-                    let mut tab_data = Vec::new();
 
                     for (i, tab) in tabs.iter().enumerate() {
                         let url = get_page_url(tab);
@@ -54,27 +50,15 @@ impl Tool for BrowserTabListTool {
                         let marker = if active { " [active]" } else { "" };
 
                         output.push_str(&format!("[{}]{} {}\n    {}\n", i, marker, title, url));
-                        tab_data.push(json!({
-                            "index": i,
-                            "title": title,
-                            "url": url,
-                            "active": active
-                        }));
                     }
 
-                    Ok(ToolOutput {
-                        summary: format!("{} tab(s):\n{}", tabs.len(), output),
-                        raw: Some(json!({"tabs": tab_data, "count": tabs.len()})),
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    })
+                    Ok(vec![Content::text(format!(
+                        "{} tab(s):\n{}",
+                        tabs.len(),
+                        output
+                    ))])
                 }
-                Err(e) => Ok(ToolOutput {
-                    summary: format!("Failed to list tabs: {}", e),
-                    raw: None,
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
+                Err(e) => Ok(vec![Content::text(format!("Failed to list tabs: {}", e))]),
             }
         })
         .await

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
+use agent_base::{AgentResult, Content, Tool, ToolContext};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
@@ -22,27 +22,24 @@ impl Tool for BrowserExtractTool {
         "browser_extract_content"
     }
 
-    fn definition(&self) -> Value {
+    fn description(&self) -> &'static str {
+        "Extract the full HTML content or text of the current page. Use for detailed scraping or analysis."
+    }
+
+    fn schema(&self) -> Value {
         json!({
-            "type": "function",
-            "function": {
-                "name": "browser_extract_content",
-                "description": "Extract the full HTML content or text of the current page. Use for detailed scraping or analysis.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "include_html": {
-                            "type": "boolean",
-                            "description": "If true, returns the full HTML source. If false (default), returns plain text only.",
-                            "default": false
-                        }
-                    }
+            "type": "object",
+            "properties": {
+                "include_html": {
+                    "type": "boolean",
+                    "description": "If true, returns the full HTML source. If false (default), returns plain text only.",
+                    "default": false
                 }
             }
         })
     }
 
-    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
+    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
         let include_html = args["include_html"].as_bool().unwrap_or(false);
 
@@ -50,35 +47,17 @@ impl Tool for BrowserExtractTool {
             let session = session.lock().unwrap_or_else(|e| e.into_inner());
             if include_html {
                 match session.get_html() {
-                    Ok(html) => Ok(ToolOutput {
-                        summary: html,
-                        raw: Some(json!({"success": true})),
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    }),
-                    Err(e) => Ok(ToolOutput {
-                        summary: format!("Extract failed: {}", e),
-                        raw: None,
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    }),
+                    Ok(html) => Ok(vec![Content::text(html)]),
+                    Err(e) => Ok(vec![Content::text(format!("Extract failed: {}", e))]),
                 }
             } else {
                 // Plain text via JS
                 let js = "document.body ? document.body.innerText : ''";
                 match session.evaluate(js) {
-                    Ok(result) => Ok(ToolOutput {
-                        summary: result.as_str().unwrap_or("").to_string(),
-                        raw: Some(json!({"success": true})),
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    }),
-                    Err(e) => Ok(ToolOutput {
-                        summary: format!("Extract failed: {}", e),
-                        raw: None,
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    }),
+                    Ok(result) => Ok(vec![Content::text(
+                        result.as_str().unwrap_or("").to_string(),
+                    )]),
+                    Err(e) => Ok(vec![Content::text(format!("Extract failed: {}", e))]),
                 }
             }
         })

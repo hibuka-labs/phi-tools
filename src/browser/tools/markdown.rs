@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
+use agent_base::{AgentResult, Content, Tool, ToolContext};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
@@ -22,38 +22,28 @@ impl Tool for BrowserGetMarkdownTool {
         "browser_get_markdown"
     }
 
-    fn definition(&self) -> Value {
+    fn description(&self) -> &'static str {
+        "Get the current page content as Markdown. Useful for extracting readable content from articles or documentation pages."
+    }
+
+    fn schema(&self) -> Value {
         json!({
-            "type": "function",
-            "function": {
-                "name": "browser_get_markdown",
-                "description": "Get the current page content as Markdown. Useful for extracting readable content from articles or documentation pages.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {}
-                }
-            }
+            "type": "object",
+            "properties": {}
         })
     }
 
-    async fn call(&self, _args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
+    async fn call(&self, _args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
             let session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.get_markdown() {
-                Ok(md) => Ok(ToolOutput {
-                    summary: md,
-                    raw: Some(json!({"success": true})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
-                Err(e) => Ok(ToolOutput {
-                    summary: format!("Failed to get markdown: {}", e),
-                    raw: None,
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
+                Ok(md) => Ok(vec![Content::text(md)]),
+                Err(e) => Ok(vec![Content::text(format!(
+                    "Failed to get markdown: {}",
+                    e
+                ))]),
             }
         })
         .await

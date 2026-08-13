@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
+use agent_base::{AgentResult, Content, Tool, ToolContext};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
@@ -23,27 +23,24 @@ impl Tool for BrowserNewTabTool {
         "browser_new_tab"
     }
 
-    fn definition(&self) -> Value {
+    fn description(&self) -> &'static str {
+        "Open a new browser tab and navigate to the specified URL."
+    }
+
+    fn schema(&self) -> Value {
         json!({
-            "type": "function",
-            "function": {
-                "name": "browser_new_tab",
-                "description": "Open a new browser tab and navigate to the specified URL.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "URL to open in the new tab"
-                        }
-                    },
-                    "required": ["url"]
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "URL to open in the new tab"
                 }
-            }
+            },
+            "required": ["url"]
         })
     }
 
-    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
+    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
         let url = normalize_url(args["url"].as_str().unwrap_or(""));
 
@@ -54,26 +51,20 @@ impl Tool for BrowserNewTabTool {
                 Ok(_tab) => match session.navigate(&url) {
                     Ok(_) => {
                         let _ = session.wait_for_navigation();
-                        Ok(ToolOutput {
-                            summary: format!("Opened new tab and navigated to {}.", url),
-                            raw: Some(json!({"url": url, "success": true})),
-                            control_flow: ToolControlFlow::Continue,
-                            truncation: None,
-                        })
+                        Ok(vec![Content::text(format!(
+                            "Opened new tab and navigated to {}.",
+                            url
+                        ))])
                     }
-                    Err(e) => Ok(ToolOutput {
-                        summary: format!("New tab opened but navigation failed: {}", e),
-                        raw: Some(json!({"success": false, "error": e})),
-                        control_flow: ToolControlFlow::Continue,
-                        truncation: None,
-                    }),
+                    Err(e) => Ok(vec![Content::text(format!(
+                        "New tab opened but navigation failed: {}",
+                        e
+                    ))]),
                 },
-                Err(e) => Ok(ToolOutput {
-                    summary: format!("Failed to open new tab: {}", e),
-                    raw: Some(json!({"success": false, "error": e})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
+                Err(e) => Ok(vec![Content::text(format!(
+                    "Failed to open new tab: {}",
+                    e
+                ))]),
             }
         })
         .await

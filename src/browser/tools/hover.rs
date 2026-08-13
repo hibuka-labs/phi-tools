@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_base::{AgentResult, Tool, ToolContext, ToolControlFlow, ToolOutput};
+use agent_base::{AgentResult, Content, Tool, ToolContext};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
@@ -23,30 +23,27 @@ impl Tool for BrowserHoverTool {
         "browser_hover"
     }
 
-    fn definition(&self) -> Value {
+    fn description(&self) -> &'static str {
+        "Hover over an element. Use the index from the page snapshot (preferred) or a CSS selector."
+    }
+
+    fn schema(&self) -> Value {
         json!({
-            "type": "function",
-            "function": {
-                "name": "browser_hover",
-                "description": "Hover over an element. Use the index from the page snapshot (preferred) or a CSS selector.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "index": {
-                            "type": "integer",
-                            "description": "Element index from the page snapshot (preferred). Use either index or selector."
-                        },
-                        "selector": {
-                            "type": "string",
-                            "description": "CSS selector for the element. Use either index or selector."
-                        }
-                    }
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer",
+                    "description": "Element index from the page snapshot (preferred). Use either index or selector."
+                },
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector for the element. Use either index or selector."
                 }
             }
         })
     }
 
-    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<ToolOutput> {
+    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
         let index = args["index"].as_u64().map(|i| i as usize);
         let selector = args["selector"].as_str().map(String::from);
@@ -56,22 +53,15 @@ impl Tool for BrowserHoverTool {
 
             let css = match resolve_selector(&session, index, selector, "browser_hover") {
                 Ok(s) => s,
-                Err(msg) => return Ok(msg),
+                Err(msg) => return Ok(vec![Content::text(msg)]),
             };
 
             match session.hover_element(&css) {
-                Ok(_) => Ok(ToolOutput {
-                    summary: format!("Hovered over: {}", css),
-                    raw: Some(json!({"selector": css, "success": true})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
-                Err(e) => Ok(ToolOutput {
-                    summary: format!("Hover failed on '{}': {}", css, e),
-                    raw: Some(json!({"selector": css, "success": false, "error": e})),
-                    control_flow: ToolControlFlow::Continue,
-                    truncation: None,
-                }),
+                Ok(_) => Ok(vec![Content::text(format!("Hovered over: {}", css))]),
+                Err(e) => Ok(vec![Content::text(format!(
+                    "Hover failed on '{}': {}",
+                    css, e
+                ))]),
             }
         })
         .await

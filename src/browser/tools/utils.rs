@@ -1,7 +1,5 @@
 //! URL normalization, ARIA tree rendering, and shared tool utilities.
 
-use agent_base::{ToolControlFlow, ToolOutput};
-
 use crate::browser::dom::{AriaChild, AriaNode};
 use crate::browser::session::BrowserSession;
 
@@ -157,35 +155,25 @@ pub fn get_page_url(tab: &headless_chrome::Tab) -> String {
 }
 
 /// Resolve an element's CSS selector from either a snapshot index or an explicit CSS selector.
-/// Returns an error ToolOutput if both are specified or neither.
+/// Returns an error message if both are specified or neither.
 pub fn resolve_selector(
     session: &BrowserSession,
     index: Option<usize>,
     selector: Option<String>,
     tool_name: &str,
-) -> Result<String, ToolOutput> {
+) -> Result<String, String> {
     match (index, selector) {
-        (Some(_), Some(_)) => Err(ToolOutput {
-            summary: format!(
-                "{}: cannot specify both 'index' and 'selector'. Use one or the other.",
-                tool_name
-            ),
-            raw: None,
-            control_flow: ToolControlFlow::Continue,
-            truncation: None,
-        }),
-        (None, None) => Err(ToolOutput {
-            summary: format!("{}: must specify either 'index' or 'selector'.", tool_name),
-            raw: None,
-            control_flow: ToolControlFlow::Continue,
-            truncation: None,
-        }),
-        (Some(idx), None) => session.get_selector_for_index(idx).map_err(|e| ToolOutput {
-            summary: format!("{}: no element at index {}: {}", tool_name, idx, e),
-            raw: None,
-            control_flow: ToolControlFlow::Continue,
-            truncation: None,
-        }),
+        (Some(_), Some(_)) => Err(format!(
+            "{}: cannot specify both 'index' and 'selector'. Use one or the other.",
+            tool_name
+        )),
+        (None, None) => Err(format!(
+            "{}: must specify either 'index' or 'selector'.",
+            tool_name
+        )),
+        (Some(idx), None) => session
+            .get_selector_for_index(idx)
+            .map_err(|e| format!("{}: no element at index {}: {}", tool_name, idx, e)),
         (None, Some(s)) => Ok(s),
     }
 }
