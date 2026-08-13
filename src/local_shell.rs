@@ -235,4 +235,102 @@ mod tests {
         assert!(tool.description().contains("shell"));
         assert_eq!(tool.schema()["type"], "object");
     }
+
+    #[test]
+    fn test_metadata() {
+        let tool = LocalShellTool::new(30000);
+        let meta = tool.metadata();
+        assert_eq!(meta.name, "execute_command");
+        assert_eq!(meta.origin, "phi-tools");
+        assert_eq!(meta.version, env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn test_format_result_terminated() {
+        // exit_code == None (killed by signal) with timed_out == false.
+        let result = format_result("cmd", "out", "err", None, false);
+        assert!(result.contains("Command Terminated"));
+        assert!(result.contains("cmd"));
+        assert!(result.contains("out"));
+        assert!(result.contains("err"));
+    }
+
+    #[test]
+    fn test_format_result_success_stderr_only() {
+        let result = format_result("cmd", "", "warning", Some(0), false);
+        assert_eq!(result, "stderr:\nwarning");
+    }
+
+    #[test]
+    fn test_format_result_success_stdout_and_stderr() {
+        let result = format_result("cmd", "out", "err", Some(0), false);
+        assert_eq!(result, "stdout:\nout\n\nstderr:\nerr");
+    }
+
+    fn text_of(result: &[Content]) -> String {
+        assert_eq!(result.len(), 1);
+        match &result[0] {
+            Content::Text { text } => text.clone(),
+            other => panic!("expected text content, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_call_empty_command() {
+        let tool = LocalShellTool::new(1000);
+        let result = tool
+            .call(&json!({}), &ToolContext::for_test())
+            .await
+            .unwrap();
+        assert!(text_of(&result).contains("No command provided"));
+    }
+
+    #[tokio::test]
+    async fn test_call_happy_path() {
+        let tool = LocalShellTool::new(30_000);
+        let result = tool
+            .call(
+                &json!({ "command": "echo hello" }),
+                &ToolContext::for_test(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(text_of(&result), "hello");
+    }
+
+    #[tokio::test]
+    async fn test_call_working_dir() {
+        let tool = LocalShellTool::new(30_000);
+        let result = tool
+            .call(
+                &json!({ "command": "pwd", "working_dir": "/" }),
+                &ToolContext::for_test(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(text_of(&result), "/");
+    }
+
+    #[tokio::test]
+    async fn test_call_spawn_failure() {
+        let tool = LocalShellTool::new(1000);
+        let result = tool
+            .call(
+                &json!({ "command": "echo hi", "working_dir": "/definitely-nonexistent-dir-xyz" }),
+                &ToolContext::for_test(),
+            )
+            .await
+            .unwrap();
+        assert!(text_of(&result).contains("Command execution failed"));
+    }
+
+    #[tokio::test]
+    async fn test_call_timeout() {
+        let tool = LocalShellTool::new(100);
+        let result = tool
+            .call(&json!({ "command": "sleep 10" }), &ToolContext::for_test())
+            .await
+            .unwrap();
+        assert!(text_of(&result).contains("Command Timed Out"));
+    }
 }
