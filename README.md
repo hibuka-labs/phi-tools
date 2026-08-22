@@ -2,6 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/phi-tools.svg)](https://crates.io/crates/phi-tools)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![codecov](https://codecov.io/gh/hibuka-labs/phi-tools/branch/master/graph/badge.svg)](https://codecov.io/gh/hibuka-labs/phi-tools)
 
 General-purpose Agent toolset for the [agent-base](https://crates.io/crates/agent-base) runtime.
 
