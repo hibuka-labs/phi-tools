@@ -14,7 +14,7 @@ default = []
 browser = ["dep:headless_chrome", "dep:html2md", "dep:serde", "dep:anyhow", "dep:log", "dep:base64", "tokio/rt-multi-thread", "serde/derive"]
 
 [dependencies]
-agent-base = { version = "0.2.0" }
+agent-base = { version = "0.2.0", path = "../agent-base" }
 async-trait = "0.1"
 serde_json = "1"
 tokio = { version = "1", features = ["process", "time"] }
