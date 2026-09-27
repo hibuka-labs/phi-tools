@@ -20,10 +20,10 @@ Each tool independently implements the `agent_base::Tool` trait. Consumers regis
 ```toml
 [dependencies]
 # Shell only
-phi-tools = "0.1.5"
+phi-tools = "0.6.0"
 
 # With browser automation
-phi-tools = { version = "0.1.5", features = ["browser"] }
+phi-tools = { version = "0.6.0", features = ["browser"] }
 ```
 
 ## Tools

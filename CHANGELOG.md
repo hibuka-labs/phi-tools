@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-27
+
+### Changed
+- **Breaking (dependency):** `agent-base` bumped from 0.5.0 to 0.8.0, keeping
+  the framework on a single agent-base version alongside phi-agent 0.17.0.
+  No public API changes in phi-tools itself.
+
 ## [0.5.0] - 2026-09-06
 
 ### Changed
