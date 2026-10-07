@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-07
+
+### Changed
+- **Dependency:** `agent-base` bumped from 0.8.0 to 0.9.0, keeping the family on
+  a single agent-base version alongside phi-agent 0.18.0. No API changes.
+
 ## [0.6.0] - 2026-09-27
 
 ### Changed
