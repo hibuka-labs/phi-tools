@@ -30,6 +30,7 @@ pub mod browser;
 pub use browser::{
     BrowserToolset,
     config::{ConnectionOptions, LaunchOptions},
+    groups::{BrowserToolGroup, browser_tool_names},
     tools::{
         BrowserClickTool, BrowserCloseTabTool, BrowserCloseTool, BrowserEvaluateTool,
         BrowserExtractTool, BrowserGetMarkdownTool, BrowserGoBackTool, BrowserGoForwardTool,
@@ -50,40 +51,38 @@ pub type BrowserLaunchOptions = LaunchOptions;
 #[cfg(feature = "browser")]
 pub type BrowserConnectionOptions = ConnectionOptions;
 
-/// The 22 browser tools as a list.
+/// The 22 browser tools as a list — the whole suite, in registration order.
 ///
 /// Builders that wrap `agent_base::AgentBuilder` rather than being one (the
 /// product shells) can register these with their own `register_tool_arc`;
 /// [`register_browser_tools`] is the same set for the plain base builder.
+/// Scenarios that only need part of the suite should register a subset —
+/// see [`browser_tools_subset`] / [`browser_tools_groups`]; every tool schema
+/// registered is paid for on every LLM request.
 #[cfg(feature = "browser")]
 pub fn browser_tools(browser: &BrowserToolset) -> Vec<std::sync::Arc<dyn agent_base::Tool>> {
-    use std::sync::Arc;
+    browser::groups::construct_groups(browser.session(), &[browser::groups::BrowserToolGroup::All])
+}
 
-    let session = browser.session();
-    vec![
-        Arc::new(BrowserNavigateTool::new(session.clone())),
-        Arc::new(BrowserClickTool::new(session.clone())),
-        Arc::new(BrowserInputTool::new(session.clone())),
-        Arc::new(BrowserScrollTool::new(session.clone())),
-        Arc::new(BrowserHoverTool::new(session.clone())),
-        Arc::new(BrowserSelectTool::new(session.clone())),
-        Arc::new(BrowserPressKeyTool::new(session.clone())),
-        Arc::new(BrowserScreenshotTool::new(session.clone())),
-        Arc::new(BrowserSnapshotTool::new(session.clone())),
-        Arc::new(BrowserEvaluateTool::new(session.clone())),
-        Arc::new(BrowserExtractTool::new(session.clone())),
-        Arc::new(BrowserGetMarkdownTool::new(session.clone())),
-        Arc::new(BrowserReadLinksTool::new(session.clone())),
-        Arc::new(BrowserGoBackTool::new(session.clone())),
-        Arc::new(BrowserGoForwardTool::new(session.clone())),
-        Arc::new(BrowserNewTabTool::new(session.clone())),
-        Arc::new(BrowserCloseTabTool::new(session.clone())),
-        Arc::new(BrowserSwitchTabTool::new(session.clone())),
-        Arc::new(BrowserTabListTool::new(session.clone())),
-        Arc::new(BrowserWaitTool::new(session.clone())),
-        Arc::new(BrowserCloseTool::new(session.clone())),
-        Arc::new(BrowserRestartTool::new(session.clone())),
-    ]
+/// The browser tools of one usage scenario ([`BrowserToolGroup::All`] is the
+/// full suite — same list as [`browser_tools`]).
+#[cfg(feature = "browser")]
+pub fn browser_tools_subset(
+    browser: &BrowserToolset,
+    group: BrowserToolGroup,
+) -> Vec<std::sync::Arc<dyn agent_base::Tool>> {
+    browser_tools_groups(browser, &[group])
+}
+
+/// The browser tools of several usage scenarios, deduped, in registration
+/// order. An empty slice yields no tools; a slice containing
+/// [`BrowserToolGroup::All`] yields the full suite.
+#[cfg(feature = "browser")]
+pub fn browser_tools_groups(
+    browser: &BrowserToolset,
+    groups: &[BrowserToolGroup],
+) -> Vec<std::sync::Arc<dyn agent_base::Tool>> {
+    browser::groups::construct_groups(browser.session(), groups)
 }
 
 /// Register all 22 browser-automation tools on the builder.

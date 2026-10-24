@@ -7,6 +7,7 @@
 
 pub mod config;
 pub mod dom;
+pub mod groups;
 pub mod session;
 pub mod tools;
 
