@@ -45,7 +45,7 @@ impl Tool for BrowserNavigateTool {
         let url = normalize_url(args["url"].as_str().unwrap_or(""));
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap_or_else(|e| e.into_inner());
+            let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
 
             match session.navigate(&url) {
                 Ok(_) => {

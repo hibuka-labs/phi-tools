@@ -50,34 +50,49 @@ pub type BrowserLaunchOptions = LaunchOptions;
 #[cfg(feature = "browser")]
 pub type BrowserConnectionOptions = ConnectionOptions;
 
-/// Register all 21 browser-automation tools on the builder.
+/// The 22 browser tools as a list.
+///
+/// Builders that wrap `agent_base::AgentBuilder` rather than being one (the
+/// product shells) can register these with their own `register_tool_arc`;
+/// [`register_browser_tools`] is the same set for the plain base builder.
+#[cfg(feature = "browser")]
+pub fn browser_tools(browser: &BrowserToolset) -> Vec<std::sync::Arc<dyn agent_base::Tool>> {
+    use std::sync::Arc;
+
+    let session = browser.session();
+    vec![
+        Arc::new(BrowserNavigateTool::new(session.clone())),
+        Arc::new(BrowserClickTool::new(session.clone())),
+        Arc::new(BrowserInputTool::new(session.clone())),
+        Arc::new(BrowserScrollTool::new(session.clone())),
+        Arc::new(BrowserHoverTool::new(session.clone())),
+        Arc::new(BrowserSelectTool::new(session.clone())),
+        Arc::new(BrowserPressKeyTool::new(session.clone())),
+        Arc::new(BrowserScreenshotTool::new(session.clone())),
+        Arc::new(BrowserSnapshotTool::new(session.clone())),
+        Arc::new(BrowserEvaluateTool::new(session.clone())),
+        Arc::new(BrowserExtractTool::new(session.clone())),
+        Arc::new(BrowserGetMarkdownTool::new(session.clone())),
+        Arc::new(BrowserReadLinksTool::new(session.clone())),
+        Arc::new(BrowserGoBackTool::new(session.clone())),
+        Arc::new(BrowserGoForwardTool::new(session.clone())),
+        Arc::new(BrowserNewTabTool::new(session.clone())),
+        Arc::new(BrowserCloseTabTool::new(session.clone())),
+        Arc::new(BrowserSwitchTabTool::new(session.clone())),
+        Arc::new(BrowserTabListTool::new(session.clone())),
+        Arc::new(BrowserWaitTool::new(session.clone())),
+        Arc::new(BrowserCloseTool::new(session.clone())),
+        Arc::new(BrowserRestartTool::new(session.clone())),
+    ]
+}
+
+/// Register all 22 browser-automation tools on the builder.
 #[cfg(feature = "browser")]
 pub fn register_browser_tools(
     builder: agent_base::AgentBuilder,
     browser: &BrowserToolset,
 ) -> agent_base::AgentBuilder {
-    let session = browser.session();
-    builder
-        .register_tool(BrowserNavigateTool::new(session.clone()))
-        .register_tool(BrowserClickTool::new(session.clone()))
-        .register_tool(BrowserInputTool::new(session.clone()))
-        .register_tool(BrowserScrollTool::new(session.clone()))
-        .register_tool(BrowserHoverTool::new(session.clone()))
-        .register_tool(BrowserSelectTool::new(session.clone()))
-        .register_tool(BrowserPressKeyTool::new(session.clone()))
-        .register_tool(BrowserScreenshotTool::new(session.clone()))
-        .register_tool(BrowserSnapshotTool::new(session.clone()))
-        .register_tool(BrowserEvaluateTool::new(session.clone()))
-        .register_tool(BrowserExtractTool::new(session.clone()))
-        .register_tool(BrowserGetMarkdownTool::new(session.clone()))
-        .register_tool(BrowserReadLinksTool::new(session.clone()))
-        .register_tool(BrowserGoBackTool::new(session.clone()))
-        .register_tool(BrowserGoForwardTool::new(session.clone()))
-        .register_tool(BrowserNewTabTool::new(session.clone()))
-        .register_tool(BrowserCloseTabTool::new(session.clone()))
-        .register_tool(BrowserSwitchTabTool::new(session.clone()))
-        .register_tool(BrowserTabListTool::new(session.clone()))
-        .register_tool(BrowserWaitTool::new(session.clone()))
-        .register_tool(BrowserCloseTool::new(session.clone()))
-        .register_tool(BrowserRestartTool::new(session.clone()))
+    browser_tools(browser)
+        .into_iter()
+        .fold(builder, |builder, tool| builder.register_tool_arc(tool))
 }

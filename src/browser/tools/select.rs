@@ -55,9 +55,9 @@ impl Tool for BrowserSelectTool {
         let selector = args["selector"].as_str().map(String::from);
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap_or_else(|e| e.into_inner());
+            let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
 
-            let css = match resolve_selector(&session, index, selector, "browser_select") {
+            let css = match resolve_selector(&mut session, index, selector, "browser_select") {
                 Ok(s) => s,
                 Err(msg) => return Ok(vec![Content::text(msg)]),
             };

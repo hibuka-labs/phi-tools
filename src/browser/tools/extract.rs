@@ -44,7 +44,7 @@ impl Tool for BrowserExtractTool {
         let include_html = args["include_html"].as_bool().unwrap_or(false);
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap_or_else(|e| e.into_inner());
+            let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
             if include_html {
                 match session.get_html() {
                     Ok(html) => Ok(vec![Content::text(html)]),

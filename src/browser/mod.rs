@@ -1,6 +1,6 @@
 //! Browser automation module.
 //!
-//! Provides `BrowserToolset` (lifecycle manager) and 21 tools implementing
+//! Provides `BrowserToolset` (lifecycle manager) and 22 tools implementing
 //! `agent_base::Tool` for CDP-based browser automation.
 //!
 //! Gated behind the `browser` Cargo feature.
@@ -34,6 +34,16 @@ impl BrowserToolset {
         Ok(Self {
             session: Arc::new(Mutex::new(session)),
         })
+    }
+
+    /// A toolset whose Chrome starts on the first tool call, not now.
+    ///
+    /// Registering the 22 tools must not make every agent run pay for a
+    /// browser it may never use — see [`BrowserSession::lazy`].
+    pub fn lazy(options: LaunchOptions) -> Self {
+        Self {
+            session: Arc::new(Mutex::new(BrowserSession::lazy(options))),
+        }
     }
 
     /// Connect to an existing browser via WebSocket.

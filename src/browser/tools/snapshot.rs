@@ -38,7 +38,7 @@ impl Tool for BrowserSnapshotTool {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap_or_else(|e| e.into_inner());
+            let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.extract_dom() {
                 Ok(dom) => {
                     let count = dom.count_interactive();

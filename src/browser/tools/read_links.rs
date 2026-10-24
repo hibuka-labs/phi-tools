@@ -37,7 +37,7 @@ impl Tool for BrowserReadLinksTool {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap_or_else(|e| e.into_inner());
+            let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.read_links() {
                 Ok(links) => Ok(vec![Content::text(format!("Page links:\n{}", links))]),
                 Err(e) => Ok(vec![Content::text(format!("Failed to read links: {}", e))]),

@@ -38,7 +38,7 @@ impl Tool for BrowserTabListTool {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap_or_else(|e| e.into_inner());
+            let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.get_tabs() {
                 Ok(tabs) => {
                     let mut output = String::new();
@@ -46,7 +46,7 @@ impl Tool for BrowserTabListTool {
                     for (i, tab) in tabs.iter().enumerate() {
                         let url = get_page_url(tab);
                         let title = tab.get_title().unwrap_or_else(|_| "unknown".to_string());
-                        let active = url == get_active_url(&session);
+                        let active = url == get_active_url(&mut session);
                         let marker = if active { " [active]" } else { "" };
 
                         output.push_str(&format!("[{}]{} {}\n    {}\n", i, marker, title, url));
@@ -66,7 +66,7 @@ impl Tool for BrowserTabListTool {
     }
 }
 
-fn get_active_url(session: &BrowserSession) -> String {
+fn get_active_url(session: &mut BrowserSession) -> String {
     session
         .tab()
         .ok()

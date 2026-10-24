@@ -78,7 +78,7 @@ pub enum AriaPressed {
 }
 
 /// Box/visibility information for an element.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct BoxInfo {
     /// Whether the element is visible (non-zero bounding box).
     #[serde(default)]
@@ -86,15 +86,6 @@ pub struct BoxInfo {
     /// CSS cursor value (e.g., "pointer", "default").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
-}
-
-impl Default for BoxInfo {
-    fn default() -> Self {
-        Self {
-            visible: false,
-            cursor: None,
-        }
-    }
 }
 
 // Legacy compatibility
@@ -205,7 +196,7 @@ impl AriaNode {
         self.box_info
             .cursor
             .as_ref()
-            .map_or(false, |c| c == "pointer")
+            .is_some_and(|c| c == "pointer")
     }
 
     pub fn is_container(&self) -> bool {
@@ -248,10 +239,10 @@ impl AriaNode {
             return Some(self);
         }
         for child in &self.children {
-            if let AriaChild::Node(node) = child {
-                if let Some(found) = node.find_by_index(index) {
-                    return Some(found);
-                }
+            if let AriaChild::Node(node) = child
+                && let Some(found) = node.find_by_index(index)
+            {
+                return Some(found);
             }
         }
         None
@@ -262,10 +253,10 @@ impl AriaNode {
             return Some(self);
         }
         for child in &mut self.children {
-            if let AriaChild::Node(node) = child {
-                if let Some(found) = node.find_by_index_mut(index) {
-                    return Some(found);
-                }
+            if let AriaChild::Node(node) = child
+                && let Some(found) = node.find_by_index_mut(index)
+            {
+                return Some(found);
             }
         }
         None
@@ -382,10 +373,10 @@ impl DomTree {
     fn rebuild_maps(&mut self) {
         self.iframe_indices.clear();
         let max_index = self.find_max_index(&self.root.clone());
-        if let Some(max_idx) = max_index {
-            if self.selectors.len() <= max_idx {
-                self.selectors.resize(max_idx + 1, String::new());
-            }
+        if let Some(max_idx) = max_index
+            && self.selectors.len() <= max_idx
+        {
+            self.selectors.resize(max_idx + 1, String::new());
         }
         let root = self.root.clone();
         self.collect_iframe_indices(&root);
@@ -394,23 +385,23 @@ impl DomTree {
     fn find_max_index(&self, node: &AriaNode) -> Option<usize> {
         let mut max = node.index;
         for child in &node.children {
-            if let AriaChild::Node(child_node) = child {
-                if let Some(child_max) = self.find_max_index(child_node) {
-                    max = match max {
-                        Some(current) => Some(current.max(child_max)),
-                        None => Some(child_max),
-                    };
-                }
+            if let AriaChild::Node(child_node) = child
+                && let Some(child_max) = self.find_max_index(child_node)
+            {
+                max = match max {
+                    Some(current) => Some(current.max(child_max)),
+                    None => Some(child_max),
+                };
             }
         }
         max
     }
 
     fn collect_iframe_indices(&mut self, node: &AriaNode) {
-        if let Some(index) = node.index {
-            if node.role == "iframe" {
-                self.iframe_indices.push(index);
-            }
+        if let Some(index) = node.index
+            && node.role == "iframe"
+        {
+            self.iframe_indices.push(index);
         }
         for child in &node.children {
             if let AriaChild::Node(child_node) = child {

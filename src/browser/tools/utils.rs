@@ -49,10 +49,10 @@ fn render_node(
     mode: &RenderMode,
     max_depth: Option<usize>,
 ) {
-    if let Some(max) = max_depth {
-        if depth > max {
-            return;
-        }
+    if let Some(max) = max_depth
+        && depth > max
+    {
+        return;
     }
 
     match mode {
@@ -61,6 +61,14 @@ fn render_node(
 }
 
 fn render_node_ai(node: &AriaNode, buf: &mut String, depth: usize, max_depth: Option<usize>) {
+    // The cutoff has to live here too: this function recurses into itself, so
+    // the check in `render_node` only ever fires for the root and `max_depth`
+    // would otherwise truncate nothing.
+    if let Some(max) = max_depth
+        && depth > max
+    {
+        return;
+    }
     let indent = "  ".repeat(depth);
 
     // Skip empty non-interactive non-container nodes in AI mode
@@ -157,7 +165,7 @@ pub fn get_page_url(tab: &headless_chrome::Tab) -> String {
 /// Resolve an element's CSS selector from either a snapshot index or an explicit CSS selector.
 /// Returns an error message if both are specified or neither.
 pub fn resolve_selector(
-    session: &BrowserSession,
+    session: &mut BrowserSession,
     index: Option<usize>,
     selector: Option<String>,
     tool_name: &str,
@@ -211,5 +219,32 @@ mod tests {
         assert!(snapshot.contains("[0]"));
         assert!(snapshot.contains("[pointer]"));
         assert!(snapshot.contains("[level=1]"));
+    }
+
+    /// `max_depth` must actually truncate. `render_node_ai` recurses into
+    /// itself, so a cutoff that only lives in `render_node` would apply to the
+    /// root and nothing below it.
+    #[test]
+    fn test_max_depth_truncates_nested_nodes() {
+        fn button(name: &str, index: usize, child: AriaNode) -> AriaNode {
+            let mut node = AriaNode::new("button", name).with_index(index);
+            node.children.push(AriaChild::Node(Box::new(child)));
+            node
+        }
+
+        let deepest = AriaNode::new("button", "Level3").with_index(2);
+        let middle = button("Level2", 1, deepest);
+        let outer = button("Level1", 0, middle);
+        let mut root = AriaNode::fragment();
+        root.children.push(AriaChild::Node(Box::new(outer)));
+
+        let unbounded = render_aria_tree(&root, RenderMode::Ai, None);
+        assert!(unbounded.contains("Level3"), "{unbounded}");
+
+        // Depth 3 sits past the cutoff; depths 0-2 stay.
+        let truncated = render_aria_tree(&root, RenderMode::Ai, Some(2));
+        assert!(truncated.contains("Level1"), "{truncated}");
+        assert!(truncated.contains("Level2"), "{truncated}");
+        assert!(!truncated.contains("Level3"), "{truncated}");
     }
 }

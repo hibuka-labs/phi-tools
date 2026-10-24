@@ -38,7 +38,7 @@ impl Tool for BrowserGoForwardTool {
         let session = self.session.clone();
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap_or_else(|e| e.into_inner());
+            let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.go_forward() {
                 Ok(_) => {
                     let snapshot = session.extract_dom().map_or_else(

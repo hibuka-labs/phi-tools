@@ -44,7 +44,7 @@ impl Tool for BrowserEvaluateTool {
         let script = args["script"].as_str().unwrap_or("").to_string();
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap_or_else(|e| e.into_inner());
+            let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.evaluate(&script) {
                 Ok(result) => Ok(vec![Content::text(format!(
                     "JavaScript result: {}",

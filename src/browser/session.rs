@@ -23,10 +23,22 @@ enum SessionConfig {
     Connect(ConnectionOptions),
 }
 
+/// Whether a Chrome is attached right now.
+///
+/// Three states on purpose. `Idle` is a session that has not paid for Chrome
+/// yet and spawns one on first use — a process that merely *has* browser tools
+/// must not drag a Chrome into every run. `Down` is the opposite: torn down on
+/// purpose, so only `restart` brings it back and the error can say so instead
+/// of silently respawning what the agent just closed.
+enum Live {
+    Idle,
+    Running(Browser),
+    Down,
+}
+
 /// Browser session wrapping a Chrome/Chromium instance via CDP.
 pub struct BrowserSession {
-    /// `None` when the browser has been closed or killed (allows restart to swap in a new one).
-    browser: Option<Browser>,
+    live: Live,
     config: SessionConfig,
 }
 
@@ -37,9 +49,20 @@ impl BrowserSession {
     pub fn launch(options: LaunchOptions) -> Result<Self, String> {
         let browser = Self::spawn(&options)?;
         Ok(Self {
-            browser: Some(browser),
+            live: Live::Running(browser),
             config: SessionConfig::Launch(options),
         })
+    }
+
+    /// Prepare a session that spawns Chrome on first use, not now.
+    ///
+    /// Every tool call goes through [`Self::browser`], which starts the
+    /// instance here; until then the session costs no process.
+    pub fn lazy(options: LaunchOptions) -> Self {
+        Self {
+            live: Live::Idle,
+            config: SessionConfig::Launch(options),
+        }
     }
 
     /// Connect to an existing browser instance via WebSocket.
@@ -47,7 +70,7 @@ impl BrowserSession {
         let browser = Browser::connect(options.ws_url.clone())
             .map_err(|e| format!("Failed to connect to browser: {}", e))?;
         Ok(Self {
-            browser: Some(browser),
+            live: Live::Running(browser),
             config: SessionConfig::Connect(options),
         })
     }
@@ -96,26 +119,37 @@ impl BrowserSession {
     pub fn restart(&mut self) -> Result<(), String> {
         let _ = self.close();
 
-        let browser = match &self.config {
-            SessionConfig::Launch(opts) => Self::spawn(opts)?,
-            SessionConfig::Connect(opts) => Browser::connect(opts.ws_url.clone())
-                .map_err(|e| format!("Failed to connect to browser: {}", e))?,
-        };
-        self.browser = Some(browser);
+        self.live = Live::Running(self.spawn_attached()?);
         Ok(())
     }
 
-    /// Access the live browser, or a clear error pointing at the recovery tool.
-    fn browser(&self) -> Result<&Browser, String> {
-        self.browser.as_ref().ok_or_else(|| {
-            "Browser is not running (it was closed or killed). Use browser_restart to relaunch."
-                .to_string()
-        })
+    /// Spawn or reconnect from whatever config this session was built with.
+    fn spawn_attached(&self) -> Result<Browser, String> {
+        match &self.config {
+            SessionConfig::Launch(opts) => Self::spawn(opts),
+            SessionConfig::Connect(opts) => Browser::connect(opts.ws_url.clone())
+                .map_err(|e| format!("Failed to connect to browser: {}", e)),
+        }
+    }
+
+    /// Access the live browser, starting one if this session has never had
+    /// one. Errors only when it was closed or killed on purpose.
+    fn browser(&mut self) -> Result<&Browser, String> {
+        if matches!(self.live, Live::Idle) {
+            self.live = Live::Running(self.spawn_attached()?);
+        }
+        match &self.live {
+            Live::Running(browser) => Ok(browser),
+            Live::Idle | Live::Down => {
+                Err("Browser is not running (it was closed or killed). Use browser_restart to relaunch."
+                    .to_string())
+            }
+        }
     }
 
     /// Close the browser. Tolerates a dead/unresponsive connection.
     pub fn close(&mut self) -> Result<(), String> {
-        if let Some(browser) = self.browser.as_ref() {
+        if let Live::Running(browser) = &self.live {
             // Close all tabs — the browser process exits when all tabs are closed.
             if let Ok(tabs) = browser.get_tabs().lock().map(|t| t.clone()) {
                 for tab in tabs {
@@ -123,14 +157,16 @@ impl BrowserSession {
                 }
             }
         }
-        self.browser = None;
+        // Deliberate teardown: `browser` must not respawn behind the agent's
+        // back, so this lands in `Down` rather than back in `Idle`.
+        self.live = Live::Down;
         Ok(())
     }
 
     // ── Tab management ──
 
     /// Get the active tab.
-    pub fn tab(&self) -> Result<Arc<Tab>, String> {
+    pub fn tab(&mut self) -> Result<Arc<Tab>, String> {
         self.get_active_tab()
     }
 
@@ -142,7 +178,7 @@ impl BrowserSession {
     }
 
     /// Get all open tabs.
-    pub fn get_tabs(&self) -> Result<Vec<Arc<Tab>>, String> {
+    pub fn get_tabs(&mut self) -> Result<Vec<Arc<Tab>>, String> {
         self.browser()?
             .get_tabs()
             .lock()
@@ -151,7 +187,7 @@ impl BrowserSession {
     }
 
     /// Get the currently active tab by checking visibility and focus state.
-    pub fn get_active_tab(&self) -> Result<Arc<Tab>, String> {
+    pub fn get_active_tab(&mut self) -> Result<Arc<Tab>, String> {
         let tabs = self.get_tabs()?;
 
         // First pass: check visibility + focus (strongest signal)
@@ -160,24 +196,22 @@ impl BrowserSession {
                 "document.visibilityState === 'visible' && document.hasFocus()",
                 false,
             );
-            if let Ok(obj) = result {
-                if let Some(value) = obj.value {
-                    if value.as_bool().unwrap_or(false) {
-                        return Ok(tab.clone());
-                    }
-                }
+            if let Ok(obj) = result
+                && let Some(value) = obj.value
+                && value.as_bool().unwrap_or(false)
+            {
+                return Ok(tab.clone());
             }
         }
 
         // Second pass: check just visibility
         for tab in &tabs {
             let result = tab.evaluate("document.visibilityState === 'visible'", false);
-            if let Ok(obj) = result {
-                if let Some(value) = obj.value {
-                    if value.as_bool().unwrap_or(false) {
-                        return Ok(tab.clone());
-                    }
-                }
+            if let Ok(obj) = result
+                && let Some(value) = obj.value
+                && value.as_bool().unwrap_or(false)
+            {
+                return Ok(tab.clone());
             }
         }
 
@@ -198,7 +232,7 @@ impl BrowserSession {
     // ── Navigation ──
 
     /// Navigate to a URL.
-    pub fn navigate(&self, url: &str) -> Result<(), String> {
+    pub fn navigate(&mut self, url: &str) -> Result<(), String> {
         self.tab()?
             .navigate_to(url)
             .map_err(|e| format!("Failed to navigate to {}: {}", url, e))?;
@@ -206,7 +240,7 @@ impl BrowserSession {
     }
 
     /// Wait for navigation to complete.
-    pub fn wait_for_navigation(&self) -> Result<(), String> {
+    pub fn wait_for_navigation(&mut self) -> Result<(), String> {
         self.tab()?
             .wait_until_navigated()
             .map(|_| ())
@@ -214,7 +248,7 @@ impl BrowserSession {
     }
 
     /// Navigate back in browser history.
-    pub fn go_back(&self) -> Result<(), String> {
+    pub fn go_back(&mut self) -> Result<(), String> {
         let js = "(function() { window.history.back(); return true; })()";
         self.tab()?
             .evaluate(js, false)
@@ -224,7 +258,7 @@ impl BrowserSession {
     }
 
     /// Navigate forward in browser history.
-    pub fn go_forward(&self) -> Result<(), String> {
+    pub fn go_forward(&mut self) -> Result<(), String> {
         let js = "(function() { window.history.forward(); return true; })()";
         self.tab()?
             .evaluate(js, false)
@@ -236,7 +270,7 @@ impl BrowserSession {
     // ── DOM extraction ──
 
     /// Extract the DOM tree from the active tab.
-    pub fn extract_dom(&self) -> Result<DomTree, String> {
+    pub fn extract_dom(&mut self) -> Result<DomTree, String> {
         DomTree::from_tab(&self.tab()?)
     }
 
@@ -253,7 +287,7 @@ impl BrowserSession {
     }
 
     /// Get the CSS selector for an element at the given DOM index.
-    pub fn get_selector_for_index(&self, index: usize) -> Result<String, String> {
+    pub fn get_selector_for_index(&mut self, index: usize) -> Result<String, String> {
         let dom = self.extract_dom()?;
         dom.get_selector(index)
             .cloned()
@@ -261,7 +295,7 @@ impl BrowserSession {
     }
 
     /// Click an element by CSS selector.
-    pub fn click_element(&self, selector: &str) -> Result<(), String> {
+    pub fn click_element(&mut self, selector: &str) -> Result<(), String> {
         let tab = self.tab()?;
         let element = self.find_element(&tab, selector)?;
         element
@@ -271,7 +305,7 @@ impl BrowserSession {
     }
 
     /// Type text into an input element.
-    pub fn type_text(&self, selector: &str, text: &str) -> Result<(), String> {
+    pub fn type_text(&mut self, selector: &str, text: &str) -> Result<(), String> {
         let tab = self.tab()?;
         let element = self.find_element(&tab, selector)?;
 
@@ -302,7 +336,7 @@ impl BrowserSession {
     }
 
     /// Hover over an element.
-    pub fn hover_element(&self, selector: &str) -> Result<(), String> {
+    pub fn hover_element(&mut self, selector: &str) -> Result<(), String> {
         let js = format!(
             r#"(() => {{
                 const el = document.querySelector('{}');
@@ -319,7 +353,7 @@ impl BrowserSession {
     }
 
     /// Select a dropdown option.
-    pub fn select_option(&self, selector: &str, value: &str) -> Result<(), String> {
+    pub fn select_option(&mut self, selector: &str, value: &str) -> Result<(), String> {
         let escaped_val = value.replace('\\', "\\\\").replace('\'', "\\'");
         let js = format!(
             r#"(() => {{
@@ -339,7 +373,7 @@ impl BrowserSession {
     }
 
     /// Press a keyboard key.
-    pub fn press_key(&self, key: &str) -> Result<(), String> {
+    pub fn press_key(&mut self, key: &str) -> Result<(), String> {
         let js = format!(
             r#"(() => {{
                 document.dispatchEvent(new KeyboardEvent('keydown', {{ key: '{}', bubbles: true }}));
@@ -355,7 +389,7 @@ impl BrowserSession {
     }
 
     /// Scroll the page.
-    pub fn scroll(&self, direction: &str, amount: u32) -> Result<(), String> {
+    pub fn scroll(&mut self, direction: &str, amount: u32) -> Result<(), String> {
         let (x, y) = match direction {
             "down" => (0, amount as i32),
             "up" => (0, -(amount as i32)),
@@ -377,7 +411,7 @@ impl BrowserSession {
     // ── Screenshot ──
 
     /// Capture a screenshot of the visible viewport as base64-encoded PNG string.
-    pub fn screenshot(&self) -> Result<String, String> {
+    pub fn screenshot(&mut self) -> Result<String, String> {
         use base64::Engine;
         use headless_chrome::protocol::cdp::Page::CaptureScreenshotFormatOption;
 
@@ -391,7 +425,7 @@ impl BrowserSession {
     // ── JavaScript evaluation ──
 
     /// Execute JavaScript in the page context and return the result as a JSON value.
-    pub fn evaluate(&self, script: &str) -> Result<serde_json::Value, String> {
+    pub fn evaluate(&mut self, script: &str) -> Result<serde_json::Value, String> {
         let tab = self.tab()?;
         let result = tab
             .evaluate(script, false)
@@ -404,7 +438,7 @@ impl BrowserSession {
     // ── Content extraction ──
 
     /// Get the page content as Markdown.
-    pub fn get_markdown(&self) -> Result<String, String> {
+    pub fn get_markdown(&mut self) -> Result<String, String> {
         let tab = self.tab()?;
         let html = tab
             .get_content()
@@ -413,14 +447,14 @@ impl BrowserSession {
     }
 
     /// Get the page's full HTML.
-    pub fn get_html(&self) -> Result<String, String> {
+    pub fn get_html(&mut self) -> Result<String, String> {
         let tab = self.tab()?;
         tab.get_content()
             .map_err(|e| format!("Failed to get HTML: {}", e))
     }
 
     /// Extract all links from the page.
-    pub fn read_links(&self) -> Result<String, String> {
+    pub fn read_links(&mut self) -> Result<String, String> {
         let js = r#"(() => {
             const links = Array.from(document.querySelectorAll('a[href]'));
             return JSON.stringify(links.map((a, i) => ({
@@ -461,10 +495,30 @@ impl Drop for BrowserSession {
 mod tests {
     use super::*;
 
+    /// A session that was never started must not resurrect Chrome after a
+    /// deliberate `close()` — only `browser_restart` may. Without this split,
+    /// closing would silently relaunch what the agent just tore down.
+    #[test]
+    fn closed_session_stays_down_instead_of_respawning() {
+        let mut session = BrowserSession::lazy(LaunchOptions::default());
+        session.close().expect("close");
+        let err = match session.browser() {
+            Ok(_) => panic!("a closed session must stay down"),
+            Err(err) => err,
+        };
+        assert!(err.contains("browser_restart"), "{err}");
+    }
+
+    /// Building a lazy session must not need a browser at all.
+    #[test]
+    fn lazy_session_constructs_without_chrome() {
+        let _session = BrowserSession::lazy(LaunchOptions::default());
+    }
+
     #[test]
     #[ignore] // Requires Chrome installed
     fn test_launch_and_navigate() {
-        let session =
+        let mut session =
             BrowserSession::launch(LaunchOptions::default()).expect("Failed to launch browser");
         assert!(session.get_tabs().is_ok());
 
@@ -497,7 +551,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_extract_dom() {
-        let session =
+        let mut session =
             BrowserSession::launch(LaunchOptions::default()).expect("Failed to launch browser");
         session.navigate("about:blank").expect("Navigation failed");
         session
@@ -511,7 +565,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_screenshot() {
-        let session =
+        let mut session =
             BrowserSession::launch(LaunchOptions::default()).expect("Failed to launch browser");
         session.navigate("about:blank").expect("Navigation failed");
 

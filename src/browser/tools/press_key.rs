@@ -44,7 +44,7 @@ impl Tool for BrowserPressKeyTool {
         let key = args["key"].as_str().unwrap_or("").to_string();
 
         tokio::task::spawn_blocking(move || {
-            let session = session.lock().unwrap_or_else(|e| e.into_inner());
+            let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.press_key(&key) {
                 Ok(_) => Ok(vec![Content::text(format!("Pressed key: {}", key))]),
                 Err(e) => Ok(vec![Content::text(format!("Press key failed: {}", e))]),
