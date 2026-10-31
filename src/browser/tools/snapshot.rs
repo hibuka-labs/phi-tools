@@ -5,7 +5,9 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 
 use crate::browser::session::BrowserSession;
-use crate::browser::tools::utils::{RenderMode, render_aria_tree};
+use crate::browser::tools::utils::{
+    CONTINUATION_PAGE, RenderMode, fit_to_budget, render_aria_tree,
+};
 
 pub struct BrowserSnapshotTool {
     session: Arc<Mutex<BrowserSession>>,
@@ -34,8 +36,9 @@ impl Tool for BrowserSnapshotTool {
         })
     }
 
-    async fn call(&self, _args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
+    async fn call(&self, _args: &Value, ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
+        let max_chars = ctx.max_output_chars;
 
         tokio::task::spawn_blocking(move || {
             let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
@@ -43,9 +46,13 @@ impl Tool for BrowserSnapshotTool {
                 Ok(dom) => {
                     let count = dom.count_interactive();
                     let snapshot = render_aria_tree(&dom.root, RenderMode::Ai, None);
-                    Ok(vec![Content::text(format!(
-                        "Page snapshot ({} interactive elements):\n{}",
-                        count, snapshot
+                    Ok(vec![Content::text(fit_to_budget(
+                        &format!(
+                            "Page snapshot ({} interactive elements):\n{}",
+                            count, snapshot
+                        ),
+                        max_chars,
+                        CONTINUATION_PAGE,
                     ))])
                 }
                 Err(e) => Ok(vec![Content::text(format!(

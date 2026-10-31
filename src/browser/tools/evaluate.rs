@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 
 use crate::browser::session::BrowserSession;
+use crate::browser::tools::utils::{CONTINUATION_SCRIPT, fit_to_budget};
 
 pub struct BrowserEvaluateTool {
     session: Arc<Mutex<BrowserSession>>,
@@ -39,16 +40,18 @@ impl Tool for BrowserEvaluateTool {
         })
     }
 
-    async fn call(&self, args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
+    async fn call(&self, args: &Value, ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
         let script = args["script"].as_str().unwrap_or("").to_string();
+        let max_chars = ctx.max_output_chars;
 
         tokio::task::spawn_blocking(move || {
             let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.evaluate(&script) {
-                Ok(result) => Ok(vec![Content::text(format!(
-                    "JavaScript result: {}",
-                    result
+                Ok(result) => Ok(vec![Content::text(fit_to_budget(
+                    &format!("JavaScript result: {}", result),
+                    max_chars,
+                    CONTINUATION_SCRIPT,
                 ))]),
                 Err(e) => Ok(vec![Content::text(format!(
                     "JavaScript evaluation failed: {}",

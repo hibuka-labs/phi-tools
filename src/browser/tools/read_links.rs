@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 
 use crate::browser::session::BrowserSession;
+use crate::browser::tools::utils::{CONTINUATION_PAGE, fit_to_budget};
 
 pub struct BrowserReadLinksTool {
     session: Arc<Mutex<BrowserSession>>,
@@ -33,13 +34,18 @@ impl Tool for BrowserReadLinksTool {
         })
     }
 
-    async fn call(&self, _args: &Value, _ctx: &ToolContext) -> AgentResult<Vec<Content>> {
+    async fn call(&self, _args: &Value, ctx: &ToolContext) -> AgentResult<Vec<Content>> {
         let session = self.session.clone();
+        let max_chars = ctx.max_output_chars;
 
         tokio::task::spawn_blocking(move || {
             let mut session = session.lock().unwrap_or_else(|e| e.into_inner());
             match session.read_links() {
-                Ok(links) => Ok(vec![Content::text(format!("Page links:\n{}", links))]),
+                Ok(links) => Ok(vec![Content::text(fit_to_budget(
+                    &format!("Page links:\n{}", links),
+                    max_chars,
+                    CONTINUATION_PAGE,
+                ))]),
                 Err(e) => Ok(vec![Content::text(format!("Failed to read links: {}", e))]),
             }
         })

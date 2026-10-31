@@ -150,6 +150,70 @@ fn render_node_ai(node: &AriaNode, buf: &mut String, depth: usize, max_depth: Op
     }
 }
 
+/// Continuation hint for messages that render a page view (snapshots,
+/// markdown, links, HTML): the surgical re-read tool reaches the tail.
+pub const CONTINUATION_PAGE: &str = "use browser_evaluate to read specific content";
+
+/// Continuation hint for `browser_evaluate` results.
+pub const CONTINUATION_SCRIPT: &str = "re-run with a narrower script";
+
+/// Fit a page-derived message into the per-call output budget
+/// (`ToolContext::max_output_chars`) so the engine's hard reject (agent-base
+/// §6.5 — over-budget output fails the whole call) never fires for a tool
+/// rendering unbounded page content. Same contract as the kernel tools'
+/// `read_file`: whole lines kept, a continuation hint appended.
+///
+/// `None` (no budget configured) and text already within budget come back
+/// unchanged. The budget counts **chars** — the engine measures
+/// `content_text(..).chars().count()`, so CJK page text must not be cut at a
+/// byte count. `continuation` names the way to see the missing tail.
+pub fn fit_to_budget(text: &str, max_chars: Option<usize>, continuation: &str) -> String {
+    let Some(max_chars) = max_chars else {
+        return text.to_string();
+    };
+    let total = text.chars().count();
+    if total <= max_chars {
+        return text.to_string();
+    }
+
+    // The marker and its separating newline are part of the budget, so the
+    // message the engine measures stays <= max_chars with the notice attached.
+    let marker = format!("...(truncated, {total} chars total; {continuation})");
+    let reserve = marker.chars().count() + 1;
+    let budget = max_chars.saturating_sub(reserve);
+
+    let mut out = String::new();
+    let mut used = 0usize;
+    for line in text.split_inclusive('\n') {
+        let line_chars = line.chars().count();
+        if used + line_chars > budget {
+            break;
+        }
+        out.push_str(line);
+        used += line_chars;
+    }
+    if used == 0 {
+        // Not even the first line fits (one giant line — e.g. minified HTML —
+        // or a tiny budget): hard-cut at a char boundary so the remainder is
+        // still valid text.
+        out.extend(text.chars().take(budget));
+    }
+    while out.ends_with('\n') {
+        out.pop();
+    }
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    out.push_str(&marker);
+
+    // Ultimate guard: a budget smaller than the marker itself must still not
+    // exceed what the engine measures.
+    if out.chars().count() > max_chars {
+        out = out.chars().take(max_chars).collect();
+    }
+    out
+}
+
 /// Get the current page URL from a tab.
 pub fn get_page_url(tab: &headless_chrome::Tab) -> String {
     let result = tab.evaluate("window.location.href", false);
@@ -246,5 +310,81 @@ mod tests {
         assert!(truncated.contains("Level1"), "{truncated}");
         assert!(truncated.contains("Level2"), "{truncated}");
         assert!(!truncated.contains("Level3"), "{truncated}");
+    }
+
+    // ── Output budget (agent-base §6.5: the engine rejects, tools self-bound) ──
+
+    #[test]
+    fn fit_to_budget_is_identity_without_a_budget_or_under_it() {
+        let text = "short page\n- button [0] \"OK\"\n";
+        assert_eq!(fit_to_budget(text, None, CONTINUATION_PAGE), text);
+        assert_eq!(
+            fit_to_budget(text, Some(text.chars().count()), CONTINUATION_PAGE),
+            text,
+            "exactly at budget is not truncation"
+        );
+    }
+
+    #[test]
+    fn fit_to_budget_counts_chars_not_bytes() {
+        // The engine measures chars (CJK is 3 bytes/char). Five 40-char CJK
+        // lines (615 bytes) at a 200-char budget: a byte-counting cut would
+        // fit one line, a char-counting one fits two — and the result must
+        // stay within 200 *chars* either way.
+        let text: String = (0..5).map(|_| format!("{}\n", "汉".repeat(40))).collect();
+        let out = fit_to_budget(&text, Some(200), CONTINUATION_PAGE);
+        assert!(out.chars().count() <= 200, "{} chars", out.chars().count());
+        assert!(out.contains("...(truncated"), "{out}");
+        let whole_cjk_lines = out.lines().filter(|l| l.chars().count() == 40).count();
+        assert_eq!(
+            whole_cjk_lines, 2,
+            "kept whole lines counted in chars: {out}"
+        );
+    }
+
+    #[test]
+    fn fit_to_budget_keeps_whole_lines_and_names_the_continuation() {
+        // Fixed-width lines so a mid-line cut would be visible.
+        let text: String = (0..20)
+            .map(|i| format!("line-{i:02} {}\n", "x".repeat(12)))
+            .collect();
+        let out = fit_to_budget(&text, Some(120), CONTINUATION_PAGE);
+
+        assert!(out.chars().count() <= 120, "{} chars", out.chars().count());
+        assert!(out.contains("...(truncated"), "{out}");
+        assert!(out.contains(CONTINUATION_PAGE), "{out}");
+        assert!(out.contains("line-00"), "{out}");
+
+        let kept: Vec<&str> = out.lines().filter(|l| l.starts_with("line-")).collect();
+        assert!(!kept.is_empty(), "{out}");
+        assert!(kept.len() < 20, "must actually truncate: {out}");
+        assert!(
+            kept.iter().all(|l| l.len() == "line-00 ".len() + 12),
+            "kept lines are whole, never half-cut: {out}"
+        );
+        // The kept lines are a prefix of the page, in order.
+        for (i, line) in kept.iter().enumerate() {
+            assert!(line.starts_with(&format!("line-{i:02}")), "{out}");
+        }
+    }
+
+    #[test]
+    fn fit_to_budget_hard_cuts_a_single_giant_line() {
+        // Minified HTML is one line — no line boundary exists to stop at.
+        let text = "a".repeat(500);
+        let out = fit_to_budget(&text, Some(100), CONTINUATION_SCRIPT);
+        assert!(out.chars().count() <= 100, "{} chars", out.chars().count());
+        assert!(out.contains("...(truncated"), "{out}");
+    }
+
+    #[test]
+    fn fit_to_budget_never_exceeds_a_pathological_budget() {
+        // A budget smaller than the marker itself still must not overshoot:
+        // the engine rejects on measurement alone.
+        let text = "b".repeat(500);
+        for max in 0..40 {
+            let out = fit_to_budget(&text, Some(max), CONTINUATION_PAGE);
+            assert!(out.chars().count() <= max, "max={max}: {out}");
+        }
     }
 }
