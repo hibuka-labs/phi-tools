@@ -1,7 +1,7 @@
 # phi-tools
 
 [![Crates.io](https://img.shields.io/crates/v/phi-tools.svg)](https://crates.io/crates/phi-tools)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 
 通用 Agent 工具集，基于 [agent-base](https://crates.io/crates/agent-base) 运行时。
 
@@ -142,6 +142,6 @@ let browser = BrowserToolset::launch(opts)?;
 
 ## License
 
-MIT
+MIT OR Apache-2.0（见 [LICENSE-MIT](LICENSE-MIT) 与 [LICENSE-APACHE](LICENSE-APACHE)）。
 
 [English](README.md)

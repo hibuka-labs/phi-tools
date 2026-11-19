@@ -1,7 +1,7 @@
 # phi-tools
 
 [![Crates.io](https://img.shields.io/crates/v/phi-tools.svg)](https://crates.io/crates/phi-tools)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![codecov](https://codecov.io/gh/hibuka-labs/phi-tools/branch/main/graph/badge.svg)](https://codecov.io/gh/hibuka-labs/phi-tools)
 
 General-purpose Agent toolset for the [agent-base](https://crates.io/crates/agent-base) runtime.
@@ -143,6 +143,6 @@ let browser = BrowserToolset::launch(opts)?;
 
 ## License
 
-MIT
+MIT OR Apache-2.0 — see [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).
 
 [中文文档](README_CN.md)
