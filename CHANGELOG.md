@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The `working_dir` test no longer asserts a Unix path shape.** It ran
+  `pwd` with `working_dir: "/"` and compared the output to `"/"`. On
+  Windows `"/"` is a drive-relative rooted path rather than the filesystem
+  root, and the shell there is the MSYS one Git for Windows ships, which
+  renders the cwd of `D:\...` as `/d/...` — so the Windows job compared
+  `"/d"` against `"/"` and failed. The test now builds a real directory
+  under the temp dir and asserts the cwd carries that directory's name,
+  which is what "the command ran where it was told to" means on every
+  platform.
+
+### Changed
+- **The `sh -c` dialect is documented as intentional.** Windows runs
+  commands through the MSYS shell that Git for Windows installs, so `sh`
+  has to be on `PATH` there; running the same commands through `cmd`
+  instead would change the language the model writes (`grep`, `tail`,
+  `&&`, `$VAR`) without the caller asking for it.
+
 ## [0.11.0] - 2026-11-20
 
 ### Changed

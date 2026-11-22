@@ -9,6 +9,14 @@ use serde_json::{Value, json};
 ///
 /// Executes arbitrary commands via `sh -c`, with support for timeout,
 /// cancellation, and working directory.
+///
+/// The command dialect is POSIX `sh` on every platform, Windows included:
+/// there the shell is the MSYS one that Git for Windows ships, so `sh` has
+/// to be on `PATH` (a Windows box without Git for Windows has no `sh` and
+/// every call fails to spawn). The dialect is deliberately uniform — running
+/// Windows commands through `cmd` instead would change the language the
+/// model writes (`grep`, `tail`, `&&`, `$VAR`) without the caller asking
+/// for it.
 pub struct LocalShellTool {
     timeout_ms: u64,
 }
@@ -298,17 +306,36 @@ mod tests {
         assert_eq!(text_of(&result), "hello");
     }
 
+    /// The command runs in the requested directory, whatever the platform.
+    ///
+    /// The assertion is on the directory's own name, not on a Unix-shaped
+    /// path. `"/"` is not the filesystem root on Windows (a rooted path with
+    /// no drive letter is drive-relative there), and every shell renders the
+    /// cwd in its own dialect — `pwd` under Git Bash prints `/d/...` for
+    /// `D:\...`. Pinning the output to `"/"` asserted a Unix path shape the
+    /// product never promised.
     #[tokio::test]
     async fn test_call_working_dir() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let probe = dir.path().join("working_dir_probe");
+        std::fs::create_dir(&probe).expect("probe dir");
+        let probe = probe.to_string_lossy();
+
         let tool = LocalShellTool::new(30_000);
         let result = tool
             .call(
-                &json!({ "command": "pwd", "working_dir": "/" }),
+                &json!({ "command": "pwd", "working_dir": probe.as_ref() }),
                 &ToolContext::for_test(),
             )
             .await
             .unwrap();
-        assert_eq!(text_of(&result), "/");
+
+        let text = text_of(&result);
+        assert!(!text.contains("[Error]"), "unexpected error: {text}");
+        assert!(
+            text.contains("working_dir_probe"),
+            "cwd should be the probe dir, got: {text}"
+        );
     }
 
     #[tokio::test]
