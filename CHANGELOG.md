@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-11-27
+
+### Fixed
+- **The Windows `working_dir` test stops asserting a Unix path shape.** The
+  test compared against a `/`-shaped path, so it failed on Windows for reasons
+  that had nothing to do with the behaviour under test.
+- **CI runs on every release platform.** Linux, macOS and Windows all build and
+  test; a platform-primitive gate rejects hand-rolled `HOME` lookups.
+
 ### Fixed
 - **The `working_dir` test no longer asserts a Unix path shape.** It ran
   `pwd` with `working_dir: "/"` and compared the output to `"/"`. On
